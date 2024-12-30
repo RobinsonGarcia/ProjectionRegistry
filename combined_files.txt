@@ -1,0 +1,905 @@
+### /Users/robinsongarcia/projects/gnomonic/projection/__init__.py ###
+### /Users/robinsongarcia/projects/gnomonic/projection/__init__.py ###
+
+"""
+Gnomonic Projection Package
+
+This package provides functionalities for gnomonic projections,
+including registry management and default projection registration.
+"""
+
+from .registry import ProjectionRegistry
+from .default_projections import register_default_projections
+
+# Automatically register default projections
+try:
+    register_default_projections()
+except Exception as e:
+    raise RuntimeError("Failed to register default projections.") from e
+
+__all__ = ["ProjectionRegistry"]
+
+### /Users/robinsongarcia/projects/gnomonic/projection/registry.py ###
+### /Users/robinsongarcia/projects/gnomonic/projection/registry.py ###
+
+from typing import Any, Dict, Optional, Type, Union
+from .base.config import BaseProjectionConfig
+from .processor import ProjectionProcessor
+
+class ProjectionRegistry:
+    """
+    Registry for managing projection configurations and their components.
+    """
+    _registry: Dict[str, Dict[str, Type[Any]]] = {}
+
+    @classmethod
+    def register(cls, name: str, components: Dict[str, Type[Any]]) -> None:
+        """
+        Register a projection with its required components.
+
+        Args:
+            name (str): Name of the projection (e.g., 'gnomonic').
+            components (Dict[str, Type[Any]]): A dictionary containing:
+                - 'config': Configuration class (e.g., GnomonicConfig)
+                - 'grid_generation': Grid generation class
+                - 'projection_strategy': Projection strategy class
+                - 'interpolation' (optional): Interpolation class
+
+        Raises:
+            ValueError: If required components are missing.
+            TypeError: If components are not of expected types.
+        """
+        required_keys = {"config", "grid_generation", "projection_strategy"}
+        missing_keys = required_keys - components.keys()
+        if missing_keys:
+            raise ValueError(f"Components must include {required_keys}. Missing keys: {missing_keys}")
+
+        # Optional 'interpolation' component
+        if "interpolation" in components:
+            interpolation = components["interpolation"]
+            if not isinstance(interpolation, type):
+                raise TypeError("'interpolation' component must be a class type.")
+
+        # Validate that required components are classes
+        for key in required_keys:
+            component = components[key]
+            if not isinstance(component, type):
+                raise TypeError(f"'{key}' component must be a class type.")
+
+        cls._registry[name] = components
+
+    @classmethod
+    def get_projection(
+        cls, 
+        name: str, 
+        return_processor: bool = False, 
+        **kwargs: Any
+    ) -> Union[BaseProjectionConfig, ProjectionProcessor]:
+        """
+        Retrieve a configured projection by name.
+
+        Args:
+            name (str): Name of the projection to retrieve.
+            return_processor (bool): Whether to return the processor instead of the config.
+            **kwargs (Any): Configuration parameters to override defaults.
+
+        Returns:
+            Union[BaseProjectionConfig, ProjectionProcessor]: Depending on `return_processor`.
+
+        Raises:
+            ValueError: If the projection name is not found in the registry.
+            KeyError: If required components are missing from the registry.
+            RuntimeError: If instantiation of configuration fails.
+        """
+        if name not in cls._registry:
+            raise ValueError(f"Projection '{name}' not found in the registry.")
+
+        # Retrieve components
+        components = cls._registry[name]
+        try:
+            ConfigClass = components["config"]
+            GridGenerationClass = components["grid_generation"]
+            ProjectionStrategyClass = components["projection_strategy"]
+            InterpolationClass = components.get("interpolation", None)
+        except KeyError as e:
+            raise KeyError(f"Missing component in the registry: {e}") from e
+
+        # Instantiate the configuration object
+        try:
+            config_instance = ConfigClass(**kwargs)
+        except Exception as e:
+            raise RuntimeError(f"Failed to instantiate config class '{ConfigClass.__name__}': {e}") from e
+
+        # Create a BaseProjectionConfig and attach the necessary methods
+        base_config = BaseProjectionConfig(config_instance)
+        base_config.create_projection = lambda: ProjectionStrategyClass(config_instance)
+        base_config.create_grid_generation = lambda: GridGenerationClass(config_instance)
+        if InterpolationClass:
+            base_config.create_interpolation = lambda: InterpolationClass(config_instance)
+
+        if return_processor:
+            return ProjectionProcessor(base_config)
+
+        return base_config
+
+    @classmethod
+    def list_projections(cls) -> list:
+        """
+        List all registered projections.
+
+        Returns:
+            list: A list of projection names.
+        """
+        return list(cls._registry.keys())
+
+### /Users/robinsongarcia/projects/gnomonic/projection/processor.py ###
+### /Users/robinsongarcia/projects/gnomonic/projection/processor.py ###
+
+from typing import Any, Optional, Tuple
+from .base.config import BaseProjectionConfig
+from .base.transform import CoordinateTransformer
+import cv2
+import numpy as np
+
+class ProjectionProcessor:
+    """
+    Processor for handling forward and backward projections using the provided configuration.
+    """
+    def __init__(self, config: BaseProjectionConfig) -> None:
+        """
+        Initialize the ProjectionProcessor with a given configuration.
+
+        Args:
+            config (BaseProjectionConfig): The projection configuration.
+
+        Raises:
+            TypeError: If 'config' is not an instance of BaseProjectionConfig.
+            RuntimeError: If initialization of components fails.
+        """
+        if not isinstance(config, BaseProjectionConfig):
+            raise TypeError(f"config must be an instance of BaseProjectionConfig, got {type(config)} instead.")
+        
+        self.config: BaseProjectionConfig = config
+        try:
+            self.projection = config.create_projection()
+            self.grid_generation = config.create_grid_generation()
+            self.interpolation = config.create_interpolation()
+        except Exception as e:
+            raise RuntimeError(f"Failed to initialize ProjectionProcessor components: {e}") from e
+
+    def forward(self, img: np.ndarray, **kwargs: Any) -> np.ndarray:
+        """
+        Forward projection of an image.
+
+        Args:
+            img (np.ndarray): The input equirectangular image.
+            **kwargs (Any): Additional parameters to override projection configuration.
+
+        Returns:
+            np.ndarray: Projected rectilinear image.
+
+        Raises:
+            ValueError: If image is not a valid NumPy array.
+            RuntimeError: If projection or grid generation fails.
+        """
+        if not isinstance(img, np.ndarray):
+            raise ValueError("Input image must be a NumPy ndarray.")
+
+        # Update configuration with dynamic parameters
+        self.config.update(**kwargs)
+
+        try:
+            # Generate grid
+            x_grid, y_grid = self.grid_generation.create_grid('forward')
+        except Exception as e:
+            raise RuntimeError(f"Failed to create forward grid: {e}") from e
+
+        try:
+            # Forward projection
+            lat, lon = self.projection.forward(x_grid, y_grid)
+        except Exception as e:
+            raise RuntimeError(f"Failed during forward projection: {e}") from e
+
+        try:
+            # Transform lat/lon to image coordinates
+            map_x, map_y = CoordinateTransformer.latlon_to_image_coords(
+                lat, lon, self.grid_generation.config, img.shape
+            )
+        except Exception as e:
+            raise RuntimeError(f"Failed to transform coordinates to image space: {e}") from e
+
+        try:
+            # Interpolate to get the rectilinear image
+            return self.interpolation.interpolate(img, map_x, map_y)
+        except Exception as e:
+            raise RuntimeError(f"Interpolation failed: {e}") from e
+
+    def backward(self, rect_img: np.ndarray, **kwargs: Any) -> np.ndarray:
+        """
+        Backward projection of a rectilinear image to equirectangular.
+
+        Args:
+            rect_img (np.ndarray): The rectilinear image.
+            **kwargs (Any): Additional parameters to override projection configuration.
+
+        Returns:
+            np.ndarray: Back-projected equirectangular image.
+
+        Raises:
+            ValueError: If rect_img is not a valid NumPy array.
+            RuntimeError: If projection, grid generation, or interpolation fails.
+        """
+        if not isinstance(rect_img, np.ndarray):
+            raise ValueError("Rectilinear image must be a NumPy ndarray.")
+
+        # Update configuration with dynamic parameters
+        self.config.update(**kwargs)
+
+        try:
+            # Generate grid
+            lon_grid, lat_grid = self.grid_generation.create_grid('backward')
+        except Exception as e:
+            raise RuntimeError(f"Failed to create backward grid: {e}") from e
+
+        try:
+            # Backward projection
+            x, y, mask = self.projection.backward(lat_grid, lon_grid)
+        except Exception as e:
+            raise RuntimeError(f"Failed during backward projection: {e}") from e
+
+        try:
+            # Transform (x, y) to image coordinates
+            map_x, map_y = CoordinateTransformer.xy_to_image_coords(x, y, self.grid_generation.config)
+        except Exception as e:
+            raise RuntimeError(f"Failed to transform (x, y) to image coordinates: {e}") from e
+
+        try:
+            # Interpolate to get the equirectangular image
+            back_projected_img = self.interpolation.interpolate(
+                rect_img, map_x, map_y, mask if kwargs.get("return_mask", False) else None
+            )
+        except Exception as e:
+            raise RuntimeError(f"Interpolation failed: {e}") from e
+
+        try:
+            # Apply mask and flip image vertically if mask is provided
+            if mask is None:
+                raise ValueError("Mask is requested but not provided.")
+            if not isinstance(mask, np.ndarray):
+                raise ValueError("Mask must be a NumPy ndarray.")
+            if mask.shape != back_projected_img.shape[:2]:
+                raise ValueError("Mask shape must match the first two dimensions of the back_projected_img.")
+            back_projected_img *= mask[:, :, None]
+            return cv2.flip(back_projected_img, 0)
+        except Exception as e:
+            raise RuntimeError(f"Failed to finalize back-projected image: {e}") from e
+
+### /Users/robinsongarcia/projects/gnomonic/projection/base/__init__.py ###
+### /Users/robinsongarcia/projects/gnomonic/projection/base/__init__.py ###
+
+"""
+Base module for gnomonic projection components.
+
+This module includes base classes for projection configuration,
+strategy, grid generation, interpolation, and coordinate transformations.
+"""
+
+from .config import BaseProjectionConfig
+from .strategy import BaseProjectionStrategy
+from .grid import BaseGridGeneration
+from .interpolation import BaseInterpolation
+from .transform import CoordinateTransformer
+
+__all__ = [
+    "BaseProjectionConfig",
+    "BaseProjectionStrategy",
+    "BaseGridGeneration",
+    "BaseInterpolation",
+    "CoordinateTransformer",
+]
+
+### /Users/robinsongarcia/projects/gnomonic/projection/base/config.py ###
+### /Users/robinsongarcia/projects/gnomonic/projection/base/config.py ###
+
+from typing import Any, Dict
+from ..base.interpolation import BaseInterpolation
+
+class BaseProjectionConfig:
+    """
+    Base class for projections, allowing dynamic initialization with configuration objects.
+    """
+    def __init__(self, config_object: Any) -> None:
+        """
+        Initialize the projection configuration.
+
+        Args:
+            config_object (Any): An object (e.g., GnomonicConfig) containing configuration parameters.
+
+        Raises:
+            ValueError: If the configuration object does not have a 'params' attribute.
+        """
+        if not hasattr(config_object, "params"):
+            raise ValueError("Configuration object must have a 'params' attribute.")
+        self.config_object: Any = config_object
+        self.params: Dict[str, Any] = config_object.params
+        self.extra_params: Dict[str, Any] = {}
+
+    def create_projection(self) -> Any:
+        """
+        Placeholder for creating a projection object.
+        Subclasses or dynamic creation logic should override this method.
+
+        Raises:
+            NotImplementedError: If the method is not overridden by subclasses.
+        """
+        raise NotImplementedError("Subclasses or configuration must implement create_projection.")
+
+    def create_grid_generation(self) -> Any:
+        """
+        Placeholder for creating a grid generation object.
+        Subclasses or dynamic creation logic should override this method.
+
+        Raises:
+            NotImplementedError: If the method is not overridden by subclasses.
+        """
+        raise NotImplementedError("Subclasses or configuration must implement create_grid_generation.")
+
+    def create_interpolation(self) -> BaseInterpolation:
+        """
+        Create an interpolation object using the configuration.
+
+        Returns:
+            BaseInterpolation: The interpolation object.
+        """
+        return BaseInterpolation(self)
+
+    def update(self, **kwargs: Any) -> None:
+        """
+        Update configuration parameters dynamically.
+
+        Args:
+            **kwargs (Any): Parameters to update in the configuration.
+        """
+        for key, value in kwargs.items():
+            if key in self.params:
+                self.params[key] = value
+            else:
+                self.extra_params[key] = value
+
+    def __getattr__(self, item: str) -> Any:
+        """
+        Access configuration parameters as attributes.
+
+        Args:
+            item (str): Parameter name.
+
+        Returns:
+            Any: The value of the parameter if it exists.
+
+        Raises:
+            AttributeError: If the parameter does not exist.
+        """
+        if item in self.params:
+            return self.params[item]
+        if item in self.extra_params:
+            return self.extra_params[item]
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{item}'")
+
+    def __repr__(self) -> str:
+        """
+        String representation of the configuration.
+
+        Returns:
+            str: Human-readable string of configuration parameters.
+        """
+        return f"BaseProjectionConfig(params={self.params}, extra_params={self.extra_params})"
+
+### /Users/robinsongarcia/projects/gnomonic/projection/base/grid.py ###
+### /Users/robinsongarcia/projects/gnomonic/projection/base/grid.py ###
+
+from typing import Any, Tuple
+import numpy as np
+
+class BaseGridGeneration:
+    """
+    Base class for grid generation in projections.
+    """
+    def create_grid(self, direction: str) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Create a grid based on the specified direction.
+
+        Args:
+            direction (str): Direction of grid creation ('forward' or 'backward').
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: Generated grid arrays.
+
+        Raises:
+            NotImplementedError: If the method is not overridden by subclasses.
+            ValueError: If the direction is invalid.
+        """
+        if direction not in ('forward', 'backward'):
+            raise ValueError("Direction must be 'forward' or 'backward'.")
+        raise NotImplementedError("Subclasses must implement create_grid.")
+
+### /Users/robinsongarcia/projects/gnomonic/projection/base/interpolation.py ###
+### /Users/robinsongarcia/projects/gnomonic/projection/base/interpolation.py ###
+
+from typing import Any, Optional
+import cv2
+import numpy as np
+
+class BaseInterpolation:
+    """
+    Base class for image interpolation in projections.
+    """
+    def __init__(self, config: Any) -> None:
+        """
+        Initialize the interpolation with the given configuration.
+
+        Args:
+            config (Any): The projection configuration.
+
+        Raises:
+            TypeError: If 'config' does not have required attributes.
+        """
+        if not hasattr(config, "interpolation") or not hasattr(config, "borderMode") or not hasattr(config, "borderValue"):
+            raise TypeError("Config must have 'interpolation', 'borderMode', and 'borderValue' attributes.")
+        self.config: Any = config
+
+    def interpolate(
+        self, 
+        input_img: np.ndarray, 
+        map_x: np.ndarray, 
+        map_y: np.ndarray, 
+        mask: Optional[np.ndarray] = None
+    ) -> np.ndarray:
+        """
+        Perform image interpolation based on the provided mapping.
+
+        Args:
+            input_img (np.ndarray): The input image to interpolate.
+            map_x (np.ndarray): The mapping for the x-coordinates.
+            map_y (np.ndarray): The mapping for the y-coordinates.
+            mask (Optional[np.ndarray], optional): Mask to apply to the interpolated image. Defaults to None.
+
+        Returns:
+            np.ndarray: The interpolated image.
+
+        Raises:
+            ValueError: If input images are not valid NumPy arrays.
+            cv2.error: If OpenCV remap function fails.
+        """
+        if not isinstance(input_img, np.ndarray):
+            raise ValueError("input_img must be a NumPy ndarray.")
+        if not isinstance(map_x, np.ndarray) or not isinstance(map_y, np.ndarray):
+            raise ValueError("map_x and map_y must be NumPy ndarrays.")
+
+        try:
+            map_x_32: np.ndarray = map_x.astype(np.float32)
+            map_y_32: np.ndarray = map_y.astype(np.float32)
+        except Exception as e:
+            raise ValueError(f"Failed to convert map_x or map_y to float32: {e}") from e
+
+        try:
+            result: np.ndarray = cv2.remap(
+                input_img, map_x_32, map_y_32,
+                interpolation=self.config.interpolation,
+                borderMode=self.config.borderMode,
+                borderValue=self.config.borderValue
+            )
+        except cv2.error as e:
+            raise cv2.error(f"OpenCV remap failed: {e}") from e
+
+        if mask is not None:
+            if not isinstance(mask, np.ndarray):
+                raise ValueError("mask must be a NumPy ndarray if provided.")
+            if mask.shape != result.shape[:2]:
+                raise ValueError("mask shape must match the first two dimensions of the result.")
+            result *= mask[:, :, None]
+
+        return result
+
+### /Users/robinsongarcia/projects/gnomonic/projection/base/strategy.py ###
+### /Users/robinsongarcia/projects/gnomonic/projection/base/strategy.py ###
+
+from typing import Any, Tuple
+import numpy as np
+
+class BaseProjectionStrategy:
+    """
+    Base class for projection strategies.
+    """
+    def forward(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Perform forward projection from grid coordinates to latitude and longitude.
+
+        Args:
+            x (np.ndarray): X-coordinates in the grid.
+            y (np.ndarray): Y-coordinates in the grid.
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: Latitude and longitude arrays.
+
+        Raises:
+            NotImplementedError: If the method is not overridden by subclasses.
+            ValueError: If inputs are not valid NumPy arrays.
+        """
+        if not isinstance(x, np.ndarray) or not isinstance(y, np.ndarray):
+            raise ValueError("x and y must be NumPy ndarrays.")
+        raise NotImplementedError("Subclasses must implement forward.")
+
+    def backward(self, lat: np.ndarray, lon: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Perform backward projection from latitude and longitude to grid coordinates.
+
+        Args:
+            lat (np.ndarray): Latitude values.
+            lon (np.ndarray): Longitude values.
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray, np.ndarray]: X and Y coordinates in the grid, and a mask array.
+
+        Raises:
+            NotImplementedError: If the method is not overridden by subclasses.
+            ValueError: If inputs are not valid NumPy arrays.
+        """
+        if not isinstance(lat, np.ndarray) or not isinstance(lon, np.ndarray):
+            raise ValueError("lat and lon must be NumPy ndarrays.")
+        raise NotImplementedError("Subclasses must implement backward.")
+
+### /Users/robinsongarcia/projects/gnomonic/projection/base/transform.py ###
+### /Users/robinsongarcia/projects/gnomonic/projection/base/transform.py ###
+
+from typing import Any, Tuple
+import numpy as np
+
+class CoordinateTransformer:
+    """
+    Utility class for transforming coordinates between different systems.
+    """
+    @staticmethod
+    def latlon_to_image_coords(
+        lat: np.ndarray, 
+        lon: np.ndarray, 
+        config: Any, 
+        shape: Tuple[int, int, ...]
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Convert latitude and longitude to image coordinates.
+
+        Args:
+            lat (np.ndarray): Latitude values.
+            lon (np.ndarray): Longitude values.
+            config (Any): Configuration object containing grid parameters.
+            shape (Tuple[int, int, ...]): Shape of the target image (height, width, ...).
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: X and Y coordinates in image space.
+
+        Raises:
+            ValueError: If input arrays are not compatible with the image shape.
+            AttributeError: If config lacks required attributes.
+        """
+        if not isinstance(lat, np.ndarray) or not isinstance(lon, np.ndarray):
+            raise ValueError("lat and lon must be NumPy ndarrays.")
+        if not hasattr(config, "lon_min") or not hasattr(config, "lon_max") \
+           or not hasattr(config, "lat_min") or not hasattr(config, "lat_max"):
+            raise AttributeError("config must have 'lon_min', 'lon_max', 'lat_min', and 'lat_max' attributes.")
+
+        if len(shape) < 2:
+            raise ValueError("Image shape must have at least two dimensions (height, width).")
+
+        H, W = shape[:2]
+        try:
+            map_x = (lon - config.lon_min) / (config.lon_max - config.lon_min) * (W - 1)
+            map_y = (config.lat_max - lat) / (config.lat_max - config.lat_min) * (H - 1)
+        except Exception as e:
+            raise ValueError(f"Failed to compute image coordinates: {e}") from e
+
+        return map_x, map_y
+
+    @staticmethod
+    def xy_to_image_coords(
+        x: np.ndarray, 
+        y: np.ndarray, 
+        config: Any
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Convert X and Y grid coordinates to image coordinates.
+
+        Args:
+            x (np.ndarray): X coordinates in grid space.
+            y (np.ndarray): Y coordinates in grid space.
+            config (Any): Configuration object containing grid parameters.
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: X and Y coordinates in image space.
+
+        Raises:
+            ValueError: If input arrays are not compatible with grid configuration.
+            AttributeError: If config lacks required attributes.
+        """
+        if not isinstance(x, np.ndarray) or not isinstance(y, np.ndarray):
+            raise ValueError("x and y must be NumPy ndarrays.")
+        required_attrs = ["x_min", "x_max", "x_points", "y_min", "y_max", "y_points"]
+        for attr in required_attrs:
+            if not hasattr(config, attr):
+                raise AttributeError(f"config must have '{attr}' attribute.")
+
+        try:
+            map_x = (x - config.x_min) / (config.x_max - config.x_min) * (config.x_points - 1)
+            map_y = (config.y_max - y) / (config.y_max - config.y_min) * (config.y_points - 1)
+        except Exception as e:
+            raise ValueError(f"Failed to compute image coordinates: {e}") from e
+
+        return map_x, map_y
+
+### /Users/robinsongarcia/projects/gnomonic/projection/gnomonic/__init__.py ###
+### /Users/robinsongarcia/projects/gnomonic/projection/gnomonic/__init__.py ###
+
+"""
+Gnomonic Projection Module
+
+This module provides specific implementations for Gnomonic projections,
+including configuration, projection strategies, and grid generation.
+"""
+
+from .config import GnomonicConfig
+from .strategy import GnomonicProjectionStrategy
+from .grid import GnomonicGridGeneration
+
+__all__ = [
+    "GnomonicConfig",
+    "GnomonicProjectionStrategy",
+    "GnomonicGridGeneration",
+]
+
+### /Users/robinsongarcia/projects/gnomonic/projection/gnomonic/config.py ###
+### /Users/robinsongarcia/projects/gnomonic/projection/gnomonic/config.py ###
+
+from typing import Any, Dict
+import cv2
+
+class GnomonicConfig:
+    """
+    Plain configuration class for Gnomonic projections, holding default parameters
+    as a dictionary.
+    """
+    def __init__(self, **kwargs: Any) -> None:
+        """
+        Initialize the configuration with default parameters.
+
+        Args:
+            **kwargs (Any): Parameters to override default values.
+        """
+        # Default parameters
+        self.params: Dict[str, Any] = {
+            "R": 1.0,                # Radius of the sphere
+            "phi1_deg": 0.0,         # Latitude of the projection center
+            "lam0_deg": 0.0,         # Longitude of the projection center
+            "fov_deg": 90.0,         # Field of view in degrees
+            "x_points": 512,         # Number of grid points in x-direction
+            "y_points": 512,         # Number of grid points in y-direction
+            "lon_points": 1024,      # Number of longitude points for backward grid
+            "lat_points": 512,       # Number of latitude points for backward grid
+            "x_min": -1.0,           # Minimum x-coordinate in the grid
+            "x_max": 1.0,            # Maximum x-coordinate in the grid
+            "y_min": -1.0,           # Minimum y-coordinate in the grid
+            "y_max": 1.0,            # Maximum y-coordinate in the grid
+            "lon_min": -180.0,       # Minimum longitude in the grid
+            "lon_max": 180.0,        # Maximum longitude in the grid
+            "lat_min": -90.0,        # Minimum latitude in the grid
+            "lat_max": 90.0,         # Maximum latitude in the grid
+            "interpolation": None,   # Interpolation method (to be set downstream)
+            "borderMode": None,      # Border mode for interpolation
+            "borderValue": None,     # Border value for interpolation
+        }
+        self.params.update(kwargs)
+
+    def update(self, **kwargs: Any) -> None:
+        """
+        Update configuration parameters dynamically.
+
+        Args:
+            **kwargs (Any): Parameters to update in the configuration.
+        """
+        self.params.update(kwargs)
+
+    def __getitem__(self, key: str) -> Any:
+        """
+        Enable dictionary-style access for configuration parameters.
+
+        Args:
+            key (str): Parameter name.
+
+        Returns:
+            Any: The value of the parameter.
+
+        Raises:
+            KeyError: If the parameter does not exist.
+        """
+        try:
+            return self.params[key]
+        except KeyError as e:
+            raise KeyError(f"Parameter '{key}' not found in configuration.") from e
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        """
+        Enable dictionary-style updates for configuration parameters.
+
+        Args:
+            key (str): Parameter name.
+            value (Any): New value for the parameter.
+        """
+        self.params[key] = value
+
+    def __getattr__(self, item: str) -> Any:
+        """
+        Access configuration parameters as attributes.
+
+        Args:
+            item (str): Attribute name.
+
+        Returns:
+            Any: The value of the parameter.
+
+        Raises:
+            AttributeError: If the parameter does not exist.
+        """
+        if item in self.params:
+            return self.params[item]
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{item}'")
+
+    def __repr__(self) -> str:
+        """
+        String representation of the configuration.
+
+        Returns:
+            str: Human-readable string of configuration parameters.
+        """
+        return f"GnomonicConfig({self.params})"
+
+### /Users/robinsongarcia/projects/gnomonic/projection/gnomonic/grid.py ###
+### /Users/robinsongarcia/projects/gnomonic/projection/gnomonic/grid.py ###
+
+from typing import Any, Tuple
+from ..base.grid import BaseGridGeneration
+from .config import GnomonicConfig
+import numpy as np
+
+class GnomonicGridGeneration(BaseGridGeneration):
+    """
+    Grid generation implementation for Gnomonic projections.
+    """
+    def __init__(self, config: GnomonicConfig) -> None:
+        """
+        Initialize the grid generation with the provided configuration.
+
+        Args:
+            config (GnomonicConfig): The Gnomonic projection configuration.
+
+        Raises:
+            TypeError: If 'config' is not an instance of GnomonicConfig.
+        """
+        if not isinstance(config, GnomonicConfig):
+            raise TypeError(f"config must be an instance of GnomonicConfig, got {type(config)} instead.")
+        self.config: GnomonicConfig = config
+
+    def create_grid(self, direction: str) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Create a grid based on the specified direction.
+
+        Args:
+            direction (str): Direction of grid creation ('forward' or 'backward').
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: Generated grid arrays.
+
+        Raises:
+            ValueError: If the direction is invalid.
+            RuntimeError: If grid creation fails.
+        """
+        if direction == 'forward':
+            try:
+                x_vals = np.linspace(self.config.x_min, self.config.x_max, self.config.x_points)
+                y_vals = np.linspace(self.config.y_min, self.config.y_max, self.config.y_points)
+                return np.meshgrid(x_vals, y_vals)
+            except Exception as e:
+                raise RuntimeError(f"Failed to create forward grid: {e}") from e
+        elif direction == 'backward':
+            try:
+                lon_vals = np.linspace(self.config.lon_min, self.config.lon_max, self.config.lon_points)
+                lat_vals = np.linspace(self.config.lat_min, self.config.lat_max, self.config.lat_points)
+                return np.meshgrid(lon_vals, lat_vals)
+            except Exception as e:
+                raise RuntimeError(f"Failed to create backward grid: {e}") from e
+        else:
+            raise ValueError("Direction must be 'forward' or 'backward'.")
+
+### /Users/robinsongarcia/projects/gnomonic/projection/gnomonic/strategy.py ###
+### /Users/robinsongarcia/projects/gnomonic/projection/gnomonic/strategy.py ###
+
+from typing import Any, Tuple
+from ..base.strategy import BaseProjectionStrategy
+from .config import GnomonicConfig
+import numpy as np
+
+class GnomonicProjectionStrategy(BaseProjectionStrategy):
+    """
+    Gnomonic projection strategy implementing forward and backward transformations.
+    """
+    def __init__(self, config: GnomonicConfig) -> None:
+        """
+        Initialize the GnomonicProjectionStrategy with the provided configuration.
+
+        Args:
+            config (GnomonicConfig): The Gnomonic projection configuration.
+
+        Raises:
+            TypeError: If 'config' is not an instance of GnomonicConfig.
+        """
+        if not isinstance(config, GnomonicConfig):
+            raise TypeError(f"config must be an instance of GnomonicConfig, got {type(config)} instead.")
+        self.config: GnomonicConfig = config
+
+    def forward(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Perform forward Gnomonic projection from grid coordinates to latitude and longitude.
+
+        Args:
+            x (np.ndarray): X-coordinates in the grid.
+            y (np.ndarray): Y-coordinates in the grid.
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: Arrays of latitude and longitude in degrees.
+
+        Raises:
+            ValueError: If input arrays are not valid NumPy ndarrays.
+            RuntimeError: If projection computation fails.
+        """
+        if not isinstance(x, np.ndarray) or not isinstance(y, np.ndarray):
+            raise ValueError("x and y must be NumPy ndarrays.")
+
+        try:
+            phi1_rad, lam0_rad = np.deg2rad([self.config.phi1_deg, self.config.lam0_deg])
+            rho = np.sqrt(x**2 + y**2)
+            c = np.arctan2(rho, self.config.R)
+            sin_c, cos_c = np.sin(c), np.cos(c)
+            phi = np.arcsin(cos_c * np.sin(phi1_rad) - (y * sin_c * np.cos(phi1_rad)) / rho)
+            lam = lam0_rad + np.arctan2(x * sin_c, rho * np.cos(phi1_rad) * cos_c + y * np.sin(phi1_rad) * sin_c)
+            return np.rad2deg(phi), np.rad2deg(lam)
+        except Exception as e:
+            raise RuntimeError(f"Failed during forward Gnomonic projection: {e}") from e
+
+    def backward(self, lat: np.ndarray, lon: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Perform backward Gnomonic projection from latitude and longitude to grid coordinates.
+
+        Args:
+            lat (np.ndarray): Latitude values in degrees.
+            lon (np.ndarray): Longitude values in degrees.
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray, np.ndarray]: X and Y coordinates in grid space, and a mask array indicating valid projections.
+
+        Raises:
+            ValueError: If input arrays are not valid NumPy ndarrays.
+            RuntimeError: If projection computation fails.
+        """
+        if not isinstance(lat, np.ndarray) or not isinstance(lon, np.ndarray):
+            raise ValueError("lat and lon must be NumPy ndarrays.")
+
+        try:
+            phi1_rad, lam0_rad = np.deg2rad([self.config.phi1_deg, self.config.lam0_deg])
+            phi_rad, lam_rad = np.deg2rad([lat, lon])
+            cos_c = np.sin(phi1_rad) * np.sin(phi_rad) + np.cos(phi1_rad) * np.cos(phi_rad) * np.cos(lam_rad - lam0_rad)
+            # Avoid division by zero
+            cos_c = np.where(cos_c == 0, 1e-10, cos_c)
+            x = self.config.R * np.cos(phi_rad) * np.sin(lam_rad - lam0_rad) / cos_c
+            y = self.config.R * (np.cos(phi1_rad) * np.sin(phi_rad) - np.sin(phi1_rad) * np.cos(phi_rad) * np.cos(lam_rad - lam0_rad)) / cos_c
+            mask = cos_c > 0
+            return x, y, mask
+        except Exception as e:
+            raise RuntimeError(f"Failed during backward Gnomonic projection: {e}") from e
+
