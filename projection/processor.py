@@ -177,7 +177,7 @@ class ProjectionProcessor:
 
         try:
             # Apply mask and flip image vertically if mask is provided
-            if kwargs.get("return_mask", False):
+            if kwargs.get("return_mask", True):
                 if mask is None:
                     error_msg = "Mask is requested but not provided."
                     logger.error(error_msg)
@@ -191,6 +191,7 @@ class ProjectionProcessor:
                     logger.error(error_msg)
                     raise ValueError(error_msg)
                 back_projected_img *= mask[:, :, None]
+                self.mask = mask #<----- hack
                 logger.debug("Mask applied to back-projected image successfully.")
             back_projected_img_flipped = cv2.flip(back_projected_img, 0)
             logger.debug("Back-projected image flipped vertically successfully.")
