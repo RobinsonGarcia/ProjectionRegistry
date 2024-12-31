@@ -2,6 +2,11 @@
 
 from typing import Any, Tuple
 import numpy as np
+import logging
+from ..exceptions import ProcessingError
+
+# Initialize logger for this module
+logger = logging.getLogger('gnomonic_projection.base.strategy')
 
 class BaseProjectionStrategy:
     """
@@ -19,11 +24,14 @@ class BaseProjectionStrategy:
             Tuple[np.ndarray, np.ndarray]: Latitude and longitude arrays.
 
         Raises:
-            NotImplementedError: If the method is not overridden by subclasses.
-            ValueError: If inputs are not valid NumPy arrays.
+            ProcessingError: If inputs are not valid NumPy arrays or method is not overridden.
         """
+        logger.debug("Starting forward projection in BaseProjectionStrategy.")
         if not isinstance(x, np.ndarray) or not isinstance(y, np.ndarray):
-            raise ValueError("x and y must be NumPy ndarrays.")
+            error_msg = "x and y must be NumPy ndarrays."
+            logger.error(error_msg)
+            raise ProcessingError(error_msg)
+        logger.debug("Forward projection inputs are valid.")
         raise NotImplementedError("Subclasses must implement forward.")
 
     def backward(self, lat: np.ndarray, lon: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -38,9 +46,12 @@ class BaseProjectionStrategy:
             Tuple[np.ndarray, np.ndarray, np.ndarray]: X and Y coordinates in the grid, and a mask array.
 
         Raises:
-            NotImplementedError: If the method is not overridden by subclasses.
-            ValueError: If inputs are not valid NumPy arrays.
+            ProcessingError: If inputs are not valid NumPy arrays or method is not overridden.
         """
+        logger.debug("Starting backward projection in BaseProjectionStrategy.")
         if not isinstance(lat, np.ndarray) or not isinstance(lon, np.ndarray):
-            raise ValueError("lat and lon must be NumPy ndarrays.")
+            error_msg = "lat and lon must be NumPy ndarrays."
+            logger.error(error_msg)
+            raise ProcessingError(error_msg)
+        logger.debug("Backward projection inputs are valid.")
         raise NotImplementedError("Subclasses must implement backward.")

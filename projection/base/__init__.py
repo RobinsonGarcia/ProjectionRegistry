@@ -12,6 +12,15 @@ from .strategy import BaseProjectionStrategy
 from .grid import BaseGridGeneration
 from .interpolation import BaseInterpolation
 from .transform import CoordinateTransformer
+from ..exceptions import (
+    ProjectionError,
+    ConfigurationError,
+    RegistrationError,
+    ProcessingError,
+    GridGenerationError,
+    TransformationError,
+    InterpolationError,
+)
 
 __all__ = [
     "BaseProjectionConfig",
@@ -19,4 +28,11 @@ __all__ = [
     "BaseGridGeneration",
     "BaseInterpolation",
     "CoordinateTransformer",
+    "ProjectionError",
+    "ConfigurationError",
+    "RegistrationError",
+    "ProcessingError",
+    "GridGenerationError",
+    "TransformationError",
+    "InterpolationError",
 ]

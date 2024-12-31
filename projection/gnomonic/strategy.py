@@ -3,7 +3,12 @@
 from typing import Any, Tuple
 from ..base.strategy import BaseProjectionStrategy
 from .config import GnomonicConfig
+from ..exceptions import ProcessingError
 import numpy as np
+import logging
+
+# Initialize logger for this module
+logger = logging.getLogger('gnomonic_projection.gnomonic.strategy')
 
 class GnomonicProjectionStrategy(BaseProjectionStrategy):
     """
@@ -19,9 +24,13 @@ class GnomonicProjectionStrategy(BaseProjectionStrategy):
         Raises:
             TypeError: If 'config' is not an instance of GnomonicConfig.
         """
+        logger.debug("Initializing GnomonicProjectionStrategy.")
         if not isinstance(config, GnomonicConfig):
-            raise TypeError(f"config must be an instance of GnomonicConfig, got {type(config)} instead.")
+            error_msg = f"config must be an instance of GnomonicConfig, got {type(config)} instead."
+            logger.error(error_msg)
+            raise TypeError(error_msg)
         self.config: GnomonicConfig = config
+        logger.info("GnomonicProjectionStrategy initialized successfully.")
 
     def forward(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -35,11 +44,13 @@ class GnomonicProjectionStrategy(BaseProjectionStrategy):
             Tuple[np.ndarray, np.ndarray]: Arrays of latitude and longitude in degrees.
 
         Raises:
-            ValueError: If input arrays are not valid NumPy ndarrays.
-            RuntimeError: If projection computation fails.
+            ProcessingError: If projection computation fails.
         """
+        logger.debug("Starting forward Gnomonic projection.")
         if not isinstance(x, np.ndarray) or not isinstance(y, np.ndarray):
-            raise ValueError("x and y must be NumPy ndarrays.")
+            error_msg = "x and y must be NumPy ndarrays."
+            logger.error(error_msg)
+            raise ProcessingError(error_msg)
 
         try:
             phi1_rad, lam0_rad = np.deg2rad([self.config.phi1_deg, self.config.lam0_deg])
@@ -48,9 +59,14 @@ class GnomonicProjectionStrategy(BaseProjectionStrategy):
             sin_c, cos_c = np.sin(c), np.cos(c)
             phi = np.arcsin(cos_c * np.sin(phi1_rad) - (y * sin_c * np.cos(phi1_rad)) / rho)
             lam = lam0_rad + np.arctan2(x * sin_c, rho * np.cos(phi1_rad) * cos_c + y * np.sin(phi1_rad) * sin_c)
-            return np.rad2deg(phi), np.rad2deg(lam)
+            lat = np.rad2deg(phi)
+            lon = np.rad2deg(lam)
+            logger.debug("Forward Gnomonic projection computed successfully.")
+            return lat, lon
         except Exception as e:
-            raise RuntimeError(f"Failed during forward Gnomonic projection: {e}") from e
+            error_msg = f"Failed during forward Gnomonic projection: {e}"
+            logger.exception(error_msg)
+            raise ProcessingError(error_msg) from e
 
     def backward(self, lat: np.ndarray, lon: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
@@ -64,11 +80,13 @@ class GnomonicProjectionStrategy(BaseProjectionStrategy):
             Tuple[np.ndarray, np.ndarray, np.ndarray]: X and Y coordinates in grid space, and a mask array indicating valid projections.
 
         Raises:
-            ValueError: If input arrays are not valid NumPy ndarrays.
-            RuntimeError: If projection computation fails.
+            ProcessingError: If projection computation fails.
         """
+        logger.debug("Starting backward Gnomonic projection.")
         if not isinstance(lat, np.ndarray) or not isinstance(lon, np.ndarray):
-            raise ValueError("lat and lon must be NumPy ndarrays.")
+            error_msg = "lat and lon must be NumPy ndarrays."
+            logger.error(error_msg)
+            raise ProcessingError(error_msg)
 
         try:
             phi1_rad, lam0_rad = np.deg2rad([self.config.phi1_deg, self.config.lam0_deg])
@@ -79,6 +97,9 @@ class GnomonicProjectionStrategy(BaseProjectionStrategy):
             x = self.config.R * np.cos(phi_rad) * np.sin(lam_rad - lam0_rad) / cos_c
             y = self.config.R * (np.cos(phi1_rad) * np.sin(phi_rad) - np.sin(phi1_rad) * np.cos(phi_rad) * np.cos(lam_rad - lam0_rad)) / cos_c
             mask = cos_c > 0
+            logger.debug("Backward Gnomonic projection computed successfully.")
             return x, y, mask
         except Exception as e:
-            raise RuntimeError(f"Failed during backward Gnomonic projection: {e}") from e
+            error_msg = f"Failed during backward Gnomonic projection: {e}"
+            logger.exception(error_msg)
+            raise ProcessingError(error_msg) from e

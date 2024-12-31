@@ -3,6 +3,11 @@
 from typing import Any, Dict, Optional, Type, Union
 from .base.config import BaseProjectionConfig
 from .processor import ProjectionProcessor
+from .exceptions import RegistrationError
+import logging
+
+# Initialize logger for this module
+logger = logging.getLogger('gnomonic_projection.registry')
 
 class ProjectionRegistry:
     """
@@ -24,27 +29,36 @@ class ProjectionRegistry:
                 - 'interpolation' (optional): Interpolation class
 
         Raises:
-            ValueError: If required components are missing.
-            TypeError: If components are not of expected types.
+            RegistrationError: If required components are missing or invalid.
         """
+        logger.debug(f"Attempting to register projection '{name}' with components: {list(components.keys())}")
         required_keys = {"config", "grid_generation", "projection_strategy"}
         missing_keys = required_keys - components.keys()
         if missing_keys:
-            raise ValueError(f"Components must include {required_keys}. Missing keys: {missing_keys}")
+            error_msg = f"Components must include {required_keys}. Missing keys: {missing_keys}"
+            logger.error(error_msg)
+            raise RegistrationError(error_msg)
 
         # Optional 'interpolation' component
         if "interpolation" in components:
             interpolation = components["interpolation"]
             if not isinstance(interpolation, type):
-                raise TypeError("'interpolation' component must be a class type.")
+                error_msg = "'interpolation' component must be a class type."
+                logger.error(error_msg)
+                raise RegistrationError(error_msg)
+            logger.debug("'interpolation' component validated as a class type.")
 
         # Validate that required components are classes
         for key in required_keys:
             component = components[key]
             if not isinstance(component, type):
-                raise TypeError(f"'{key}' component must be a class type.")
+                error_msg = f"'{key}' component must be a class type."
+                logger.error(error_msg)
+                raise RegistrationError(error_msg)
+            logger.debug(f"'{key}' component validated as a class type.")
 
         cls._registry[name] = components
+        logger.info(f"Projection '{name}' registered successfully.")
 
     @classmethod
     def get_projection(
@@ -65,12 +79,14 @@ class ProjectionRegistry:
             Union[BaseProjectionConfig, ProjectionProcessor]: Depending on `return_processor`.
 
         Raises:
-            ValueError: If the projection name is not found in the registry.
-            KeyError: If required components are missing from the registry.
-            RuntimeError: If instantiation of configuration fails.
+            RegistrationError: If the projection name is not found or components are missing.
+            ProcessingError: If instantiation of configuration fails.
         """
+        logger.debug(f"Retrieving projection '{name}' with override parameters: {kwargs}")
         if name not in cls._registry:
-            raise ValueError(f"Projection '{name}' not found in the registry.")
+            error_msg = f"Projection '{name}' not found in the registry."
+            logger.error(error_msg)
+            raise RegistrationError(error_msg)
 
         # Retrieve components
         components = cls._registry[name]
@@ -79,14 +95,20 @@ class ProjectionRegistry:
             GridGenerationClass = components["grid_generation"]
             ProjectionStrategyClass = components["projection_strategy"]
             InterpolationClass = components.get("interpolation", None)
+            logger.debug(f"Components for projection '{name}': {list(components.keys())}")
         except KeyError as e:
-            raise KeyError(f"Missing component in the registry: {e}") from e
+            error_msg = f"Missing component in the registry: {e}"
+            logger.error(error_msg)
+            raise RegistrationError(error_msg) from e
 
         # Instantiate the configuration object
         try:
             config_instance = ConfigClass(**kwargs)
+            logger.debug(f"Configuration instance for projection '{name}' created successfully.")
         except Exception as e:
-            raise RuntimeError(f"Failed to instantiate config class '{ConfigClass.__name__}': {e}") from e
+            error_msg = f"Failed to instantiate config class '{ConfigClass.__name__}': {e}"
+            logger.exception(error_msg)
+            raise RegistrationError(error_msg) from e
 
         # Create a BaseProjectionConfig and attach the necessary methods
         base_config = BaseProjectionConfig(config_instance)
@@ -96,8 +118,10 @@ class ProjectionRegistry:
             base_config.create_interpolation = lambda: InterpolationClass(config_instance)
 
         if return_processor:
+            logger.debug(f"Returning ProjectionProcessor for projection '{name}'.")
             return ProjectionProcessor(base_config)
 
+        logger.debug(f"Returning BaseProjectionConfig for projection '{name}'.")
         return base_config
 
     @classmethod
@@ -108,4 +132,7 @@ class ProjectionRegistry:
         Returns:
             list: A list of projection names.
         """
-        return list(cls._registry.keys())
+        logger.debug("Listing all registered projections.")
+        projections = list(cls._registry.keys())
+        logger.info(f"Registered projections: {projections}")
+        return projections

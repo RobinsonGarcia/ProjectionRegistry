@@ -1,11 +1,29 @@
 ### /Users/robinsongarcia/projects/gnomonic/projection/base/config.py ###
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
+from pydantic import BaseModel, Field, validator
 from ..base.interpolation import BaseInterpolation
+from ..exceptions import ConfigurationError
+
+import logging
+
+# Initialize logger for this module
+logger = logging.getLogger('gnomonic_projection.base.config')
+
+class BaseProjectionConfigModel(BaseModel):
+    interpolation: Optional[int] = Field(default=0, description="Interpolation method for OpenCV remap")
+    borderMode: Optional[int] = Field(default=0, description="Border mode for OpenCV remap")
+    borderValue: Optional[Any] = Field(default=0, description="Border value for OpenCV remap")
+    # Add other common configuration parameters if necessary
+
+    class Config:
+        arbitrary_types_allowed = True
+        # allow_mutation = False  # Make immutable if desired
 
 class BaseProjectionConfig:
     """
     Base class for projections, allowing dynamic initialization with configuration objects.
+    Utilizes Pydantic for configuration validation and management.
     """
     def __init__(self, config_object: Any) -> None:
         """
@@ -15,12 +33,21 @@ class BaseProjectionConfig:
             config_object (Any): An object (e.g., GnomonicConfig) containing configuration parameters.
 
         Raises:
-            ValueError: If the configuration object does not have a 'params' attribute.
+            ConfigurationError: If the configuration object does not have a 'config' attribute.
         """
-        if not hasattr(config_object, "params"):
-            raise ValueError("Configuration object must have a 'params' attribute.")
+        logger.debug("Initializing BaseProjectionConfig.")
+        if not hasattr(config_object, "config"):
+            error_msg = "Configuration object must have a 'config' attribute."
+            logger.error(error_msg)
+            raise ConfigurationError(error_msg)
         self.config_object: Any = config_object
-        self.params: Dict[str, Any] = config_object.params
+        try:
+            self.params: BaseProjectionConfigModel = config_object.config
+            logger.debug("Configuration parameters loaded successfully.")
+        except Exception as e:
+            error_msg = f"Failed to load configuration parameters: {e}"
+            logger.exception(error_msg)
+            raise ConfigurationError(error_msg) from e
         self.extra_params: Dict[str, Any] = {}
 
     def create_projection(self) -> Any:
@@ -31,6 +58,7 @@ class BaseProjectionConfig:
         Raises:
             NotImplementedError: If the method is not overridden by subclasses.
         """
+        logger.debug("create_projection method called.")
         raise NotImplementedError("Subclasses or configuration must implement create_projection.")
 
     def create_grid_generation(self) -> Any:
@@ -41,6 +69,7 @@ class BaseProjectionConfig:
         Raises:
             NotImplementedError: If the method is not overridden by subclasses.
         """
+        logger.debug("create_grid_generation method called.")
         raise NotImplementedError("Subclasses or configuration must implement create_grid_generation.")
 
     def create_interpolation(self) -> BaseInterpolation:
@@ -50,6 +79,7 @@ class BaseProjectionConfig:
         Returns:
             BaseInterpolation: The interpolation object.
         """
+        logger.debug("Creating interpolation object.")
         return BaseInterpolation(self)
 
     def update(self, **kwargs: Any) -> None:
@@ -59,11 +89,19 @@ class BaseProjectionConfig:
         Args:
             **kwargs (Any): Parameters to update in the configuration.
         """
+        logger.debug(f"Updating configuration with parameters: {kwargs}")
         for key, value in kwargs.items():
-            if key in self.params:
-                self.params[key] = value
+            if key in self.params.__fields__:
+                try:
+                    setattr(self.params, key, value)
+                    logger.debug(f"Parameter '{key}' updated to {value}.")
+                except Exception as e:
+                    error_msg = f"Failed to update parameter '{key}': {e}"
+                    logger.exception(error_msg)
+                    raise ConfigurationError(error_msg) from e
             else:
                 self.extra_params[key] = value
+                logger.debug(f"Extra parameter '{key}' set to {value}.")
 
     def __getattr__(self, item: str) -> Any:
         """
@@ -78,11 +116,14 @@ class BaseProjectionConfig:
         Raises:
             AttributeError: If the parameter does not exist.
         """
-        if item in self.params:
-            return self.params[item]
+        logger.debug(f"Accessing attribute '{item}'.")
+        if hasattr(self.params, item):
+            return getattr(self.params, item)
         if item in self.extra_params:
             return self.extra_params[item]
-        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{item}'")
+        error_msg = f"'{type(self).__name__}' object has no attribute '{item}'"
+        logger.error(error_msg)
+        raise AttributeError(error_msg)
 
     def __repr__(self) -> str:
         """
@@ -91,4 +132,4 @@ class BaseProjectionConfig:
         Returns:
             str: Human-readable string of configuration parameters.
         """
-        return f"BaseProjectionConfig(params={self.params}, extra_params={self.extra_params})"
+        return f"BaseProjectionConfig(params={self.params.dict()}, extra_params={self.extra_params})"
