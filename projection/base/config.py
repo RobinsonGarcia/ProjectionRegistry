@@ -1,10 +1,7 @@
-### /Users/robinsongarcia/projects/gnomonic/projection/base/config.py ###
-
 from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field, validator
 from ..base.interpolation import BaseInterpolation
 from ..exceptions import ConfigurationError
-
 import logging
 
 # Initialize logger for this module
@@ -18,7 +15,6 @@ class BaseProjectionConfigModel(BaseModel):
 
     class Config:
         arbitrary_types_allowed = True
-        # allow_mutation = False  # Make immutable if desired
 
 class BaseProjectionConfig:
     """
@@ -81,6 +77,16 @@ class BaseProjectionConfig:
         """
         logger.debug("Creating interpolation object.")
         return BaseInterpolation(self)
+
+    def create_transformer(self) -> Any:
+        """
+        Placeholder for creating a transformer object.
+
+        Raises:
+            NotImplementedError: If the method is not overridden by subclasses.
+        """
+        logger.debug("create_transformer method called.")
+        raise NotImplementedError("Subclasses or configuration must implement create_transformer.")
 
     def update(self, **kwargs: Any) -> None:
         """

@@ -1,5 +1,3 @@
-### /Users/robinsongarcia/projects/gnomonic/projection/registry.py ###
-
 from typing import Any, Dict, Optional, Type, Union
 from .base.config import BaseProjectionConfig
 from .processor import ProjectionProcessor
@@ -8,6 +6,7 @@ import logging
 
 # Initialize logger for this module
 logger = logging.getLogger('gnomonic_projection.registry')
+
 
 class ProjectionRegistry:
     """
@@ -23,10 +22,11 @@ class ProjectionRegistry:
         Args:
             name (str): Name of the projection (e.g., 'gnomonic').
             components (Dict[str, Type[Any]]): A dictionary containing:
-                - 'config': Configuration class (e.g., GnomonicConfig)
+                - 'config': Configuration class
                 - 'grid_generation': Grid generation class
                 - 'projection_strategy': Projection strategy class
                 - 'interpolation' (optional): Interpolation class
+                - 'transformer': Transformation class (optional)
 
         Raises:
             RegistrationError: If required components are missing or invalid.
@@ -39,23 +39,14 @@ class ProjectionRegistry:
             logger.error(error_msg)
             raise RegistrationError(error_msg)
 
-        # Optional 'interpolation' component
-        if "interpolation" in components:
-            interpolation = components["interpolation"]
-            if not isinstance(interpolation, type):
-                error_msg = "'interpolation' component must be a class type."
-                logger.error(error_msg)
-                raise RegistrationError(error_msg)
-            logger.debug("'interpolation' component validated as a class type.")
-
-        # Validate that required components are classes
-        for key in required_keys:
-            component = components[key]
-            if not isinstance(component, type):
-                error_msg = f"'{key}' component must be a class type."
-                logger.error(error_msg)
-                raise RegistrationError(error_msg)
-            logger.debug(f"'{key}' component validated as a class type.")
+        # Optional 'interpolation' and 'transformer' components
+        for key in ["interpolation", "transformer"]:
+            if key in components:
+                if not isinstance(components[key], type):
+                    error_msg = f"'{key}' component must be a class type."
+                    logger.error(error_msg)
+                    raise RegistrationError(error_msg)
+                logger.debug(f"'{key}' component validated as a class type.")
 
         cls._registry[name] = components
         logger.info(f"Projection '{name}' registered successfully.")
@@ -95,6 +86,7 @@ class ProjectionRegistry:
             GridGenerationClass = components["grid_generation"]
             ProjectionStrategyClass = components["projection_strategy"]
             InterpolationClass = components.get("interpolation", None)
+            TransformerClass = components.get("transformer", None)
             logger.debug(f"Components for projection '{name}': {list(components.keys())}")
         except KeyError as e:
             error_msg = f"Missing component in the registry: {e}"
@@ -116,7 +108,8 @@ class ProjectionRegistry:
         base_config.create_grid_generation = lambda: GridGenerationClass(config_instance)
         if InterpolationClass:
             base_config.create_interpolation = lambda: InterpolationClass(config_instance)
-
+        if TransformerClass:
+            base_config.create_transformer = lambda: TransformerClass(config_instance)
         if return_processor:
             logger.debug(f"Returning ProjectionProcessor for projection '{name}'.")
             return ProjectionProcessor(base_config)

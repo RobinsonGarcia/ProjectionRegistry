@@ -1,5 +1,3 @@
-### /Users/robinsongarcia/projects/gnomonic/projection/gnomonic/config.py ###
-
 from typing import Any, Optional
 from pydantic import BaseModel, Field, validator
 import cv2
@@ -18,10 +16,6 @@ class GnomonicConfigModel(BaseModel):
     y_points: int = Field(512, description="Number of grid points in y-direction")
     lon_points: int = Field(1024, description="Number of longitude points for backward grid")
     lat_points: int = Field(512, description="Number of latitude points for backward grid")
-    x_min: float = Field(-1.0, description="Minimum x-coordinate in the grid")
-    x_max: float = Field(1.0, description="Maximum x-coordinate in the grid")
-    y_min: float = Field(-1.0, description="Minimum y-coordinate in the grid")
-    y_max: float = Field(1.0, description="Maximum y-coordinate in the grid")
     lon_min: float = Field(-180.0, description="Minimum longitude in the grid")
     lon_max: float = Field(180.0, description="Maximum longitude in the grid")
     lat_min: float = Field(-90.0, description="Minimum latitude in the grid")
@@ -38,20 +32,12 @@ class GnomonicConfigModel(BaseModel):
 
     class Config:
         arbitrary_types_allowed = True
-        # Allow mutation if needed; set to False to make immutable
-        # allow_mutation = False
 
 class GnomonicConfig:
     """
     Configuration class for Gnomonic projections using Pydantic for validation.
     """
     def __init__(self, **kwargs: Any) -> None:
-        """
-        Initialize the configuration with default parameters, overridden by any provided keyword arguments.
-
-        Args:
-            **kwargs (Any): Parameters to override default values.
-        """
         logger.debug("Initializing GnomonicConfig with parameters: %s", kwargs)
         try:
             self.config = GnomonicConfigModel(**kwargs)
@@ -62,12 +48,6 @@ class GnomonicConfig:
             raise ConfigurationError(error_msg) from e
 
     def update(self, **kwargs: Any) -> None:
-        """
-        Update configuration parameters dynamically.
-
-        Args:
-            **kwargs (Any): Parameters to update in the configuration.
-        """
         logger.debug(f"Updating GnomonicConfig with parameters: {kwargs}")
         try:
             updated_config = self.config.copy(update=kwargs)
@@ -79,18 +59,6 @@ class GnomonicConfig:
             raise ConfigurationError(error_msg) from e
 
     def __getattr__(self, item: str) -> Any:
-        """
-        Access configuration parameters as attributes.
-
-        Args:
-            item (str): Attribute name.
-
-        Returns:
-            Any: The value of the parameter.
-
-        Raises:
-            AttributeError: If the parameter does not exist.
-        """
         logger.debug(f"Accessing GnomonicConfig attribute '{item}'.")
         try:
             return getattr(self.config, item)
@@ -100,10 +68,4 @@ class GnomonicConfig:
             raise AttributeError(error_msg) from None
 
     def __repr__(self) -> str:
-        """
-        String representation of the configuration.
-
-        Returns:
-            str: Human-readable string of configuration parameters.
-        """
         return f"GnomonicConfig({self.config.dict()})"
