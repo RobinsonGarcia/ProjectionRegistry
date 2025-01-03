@@ -1,3 +1,4 @@
+
 from typing import Any, Optional
 from pydantic import BaseModel, Field, validator
 import cv2
@@ -14,8 +15,8 @@ class GnomonicConfigModel(BaseModel):
     fov_deg: float = Field(90.0, description="Field of view in degrees.")
     x_points: int = Field(512, description="Number of grid points in the x-direction.")
     y_points: int = Field(512, description="Number of grid points in the y-direction.")
-    lon_points: int = Field(1024, description="Number of longitude points for backward grid.")
-    lat_points: int = Field(512, description="Number of latitude points for backward grid.")
+    lon_points: int = Field(1024, description="Number of longitude points for inverse grid mapping.")
+    lat_points: int = Field(512, description="Number of latitude points for inverse grid mapping.")
     lon_min: float = Field(-180.0, description="Minimum longitude in the grid (degrees).")
     lon_max: float = Field(180.0, description="Maximum longitude in the grid (degrees).")
     lat_min: float = Field(-90.0, description="Minimum latitude in the grid (degrees).")
@@ -40,8 +41,9 @@ class GnomonicConfig:
     """
     Configuration class for Gnomonic projections using Pydantic for validation.
 
-    This class encapsulates all necessary parameters required to perform a Gnomonic projection.
-    It ensures that configurations are validated and managed efficiently.
+    This class encapsulates all necessary parameters required to perform both forward (equirectangular to Gnomonic)
+    and inverse (Gnomonic to equirectangular) projections. It ensures that configurations are validated
+    and managed efficiently.
 
     ## Key Parameters:
 
@@ -49,18 +51,18 @@ class GnomonicConfig:
     - **phi1_deg:** Latitude of the projection center in degrees.
     - **lam0_deg:** Longitude of the projection center in degrees.
     - **fov_deg:** Field of view in degrees.
-    - **x_points & y_points:** Grid resolution in the x and y directions.
-    - **lon_points & lat_points:** Resolution for backward grid mapping.
-    - **lon_min, lon_max, lat_min, lat_max:** Geographic bounds of the grid.
+    - **x_points & y_points:** Grid resolution for the Gnomonic projection plane.
+    - **lon_points & lat_points:** Resolution for inverse grid mapping to the equirectangular projection.
+    - **lon_min, lon_max, lat_min, lat_max:** Geographic bounds of the equirectangular grid.
     - **interpolation, borderMode, borderValue:** Parameters for image interpolation.
 
     ## Mathematical Context:
 
-    The configuration parameters directly influence the projection equations derived from
-    spherical trigonometry. For instance, the field of view (`fov_deg`) determines the extent
-    of the projection on the plane, while the center coordinates (`phi1_deg`, `lam0_deg`)
-    establish the orientation of the projection.
+    The configuration parameters directly influence the projection equations derived from spherical trigonometry.
+    For instance, the field of view (`fov_deg`) determines the extent of the Gnomonic projection on the plane,
+    while the center coordinates (`phi1_deg`, `lam0_deg`) establish the orientation of the projection.
     """
+
     def __init__(self, **kwargs: Any) -> None:
         """
         Initialize the GnomonicConfig with provided parameters.
