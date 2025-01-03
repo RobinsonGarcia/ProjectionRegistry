@@ -80,7 +80,7 @@ class ProjectionProcessor:
             lat, lon = self.projection.forward(x_grid, y_grid)
             logger.debug("Forward projection computed successfully.")
 
-            map_x, map_y = self.transformer.latlon_to_image_coords(lat, lon, img.shape)
+            map_x, map_y = self.transformer.latlon_to_image_coords(lat, lon, img.shape[:2])
             logger.debug("Coordinates transformed to image space successfully.")
 
             projected_img = self.interpolation.interpolate(img, map_x, map_y)
@@ -128,14 +128,15 @@ class ProjectionProcessor:
             x, y, mask = self.projection.backward(lat_grid, lon_grid)
             logger.debug("Backward projection computed successfully.")
 
-            map_x, map_y = self.transformer.xy_to_image_coords(x, y, self.grid_generation.config)
+            # Use config_object instead of `config.config`
+            map_x, map_y = self.transformer.xy_to_image_coords(x, y, self.config.config_object)
             logger.debug("Grid coordinates transformed to image space successfully.")
 
             back_projected_img = self.interpolation.interpolate(
-                rect_img, map_x, map_y, mask if kwargs.get("return_mask", False) else None
+                rect_img, map_x, map_y, mask if kwargs.get("return_mask", True) else None
             )
             logger.info("Backward projection completed successfully.")
-            return back_projected_img
+            return cv2.flip(back_projected_img,0)
 
         except (GridGenerationError, ProcessingError, TransformationError, InterpolationError) as e:
             logger.error(f"Backward projection failed: {e}")

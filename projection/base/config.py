@@ -123,8 +123,8 @@ class BaseProjectionConfig:
             AttributeError: If the parameter does not exist.
         """
         logger.debug(f"Accessing attribute '{item}'.")
-        if hasattr(self.params, item):
-            return getattr(self.params, item)
+        if hasattr(self.config_object, item):
+            return getattr(self.config_object, item)
         if item in self.extra_params:
             return self.extra_params[item]
         error_msg = f"'{type(self).__name__}' object has no attribute '{item}'"

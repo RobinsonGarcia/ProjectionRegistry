@@ -1,37 +1,43 @@
 from typing import Tuple, Any
 import numpy as np
 import logging
-from ..exceptions import TransformationError
+from ..exceptions import TransformationError, ConfigurationError
 
 logger = logging.getLogger('projection.mercator.transform')
 
+
 class MercatorTransformer:
     """
-    Transformation logic for Mercator projection.
+    Transformation logic for the Mercator projection.
     """
+
     def __init__(self, config):
         """
-        Initialize the GnomonicTransformer with the given configuration.
+        Initialize the MercatorTransformer with the given configuration.
 
         Args:
             config: Configuration object with necessary parameters.
         """
-        self.config = config  # Store the configuration object for use in transformations
-        
-    @staticmethod
+        required_attributes = ["lon_min", "lon_max", "lat_min", "lat_max", "x_points", "y_points"]
+        missing_attributes = [attr for attr in required_attributes if not hasattr(config, attr)]
+
+        if missing_attributes:
+            error_msg = f"Configuration object is missing required attributes: {', '.join(missing_attributes)}"
+            logger.error(error_msg)
+            raise ConfigurationError(error_msg)
+
+        self.config = config
+        logger.info("MercatorTransformer initialized successfully.")
+
     def latlon_to_image_coords(
-        lat: np.ndarray, 
-        lon: np.ndarray, 
-        config: Any, 
-        shape: Tuple[int, int]
+        self, lat: np.ndarray, lon: np.ndarray, shape: Tuple[int, int]
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Convert latitude and longitude to Mercator image coordinates.
 
         Args:
-            lat (np.ndarray): Latitude values.
-            lon (np.ndarray): Longitude values.
-            config (Any): Configuration object containing grid parameters.
+            lat (np.ndarray): Latitude values (degrees).
+            lon (np.ndarray): Longitude values (degrees).
             shape (Tuple[int, int]): Shape of the target image (height, width).
 
         Returns:
@@ -40,32 +46,32 @@ class MercatorTransformer:
         Raises:
             TransformationError: If input arrays are invalid or computation fails.
         """
-        logger.debug("Transforming lat/lon to Mercator image coordinates.")
+        logger.debug("Transforming latitude and longitude to Mercator image coordinates.")
         try:
+            if not isinstance(lat, np.ndarray) or not isinstance(lon, np.ndarray):
+                raise TypeError("Latitude and longitude must be numpy arrays.")
+
             H, W = shape
-            map_x = (lon - config.lon_min) / (config.lon_max - config.lon_min) * (W - 1)
 
-            lat_rad = np.radians(lat)
-            lat_min_rad = np.radians(config.lat_min)
-            lat_max_rad = np.radians(config.lat_max)
-            map_y = (
-                np.log(np.tan(np.pi / 4 + lat_rad / 2)) -
-                np.log(np.tan(np.pi / 4 + lat_min_rad / 2))
-            ) / (
-                np.log(np.tan(np.pi / 4 + lat_max_rad / 2)) -
-                np.log(np.tan(np.pi / 4 + lat_min_rad / 2))
-            ) * (H - 1)
+            # Normalize longitude
+            # Normalize x and y to image space
+            
+            x=lon
+            y=lat
+            map_x = ((x / np.pi) * .5 + .5) * (self.config.x_points - 1)
+            map_y = (1 + -1*(( y / (np.pi/2) )* .5 + .5 ))* (self.config.y_points - 1)
 
+            print("MAP", map_y.max(), map_x.max())
+            
+            logger.debug("Latitude and longitude transformed successfully.")
             return map_x, map_y
-        except Exception as e:
-            logger.exception("Failed to transform coordinates for Mercator projection.")
-            raise TransformationError(f"Mercator transformation failed: {e}")
 
-    @staticmethod
+        except Exception as e:
+            logger.exception("Failed to transform latitude and longitude to Mercator image coordinates.")
+            raise TransformationError(f"Mercator lat/lon transformation failed: {e}")
+
     def xy_to_image_coords(
-        x: np.ndarray, 
-        y: np.ndarray, 
-        config: Any
+        self, x: np.ndarray, y: np.ndarray, shape: Tuple[int, int]
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Transform XY grid coordinates to Mercator image coordinates.
@@ -73,9 +79,38 @@ class MercatorTransformer:
         Args:
             x (np.ndarray): X grid coordinates.
             y (np.ndarray): Y grid coordinates.
-            config (Any): Configuration object.
+            shape (Tuple[int, int]): Shape of the target image (height, width).
 
         Returns:
-            Tuple[np.ndarray, np.ndarray]: Image coordinates.
+            Tuple[np.ndarray, np.ndarray]: X and Y coordinates in image space.
+
+        Raises:
+            TransformationError: If input arrays are invalid or computation fails.
         """
-        raise NotImplementedError("Mercator backward transformation is not required.")
+        logger.debug("Transforming XY grid coordinates to Mercator image coordinates.")
+        try:
+            if not isinstance(x, np.ndarray) or not isinstance(y, np.ndarray):
+                raise TypeError("Grid coordinates must be numpy arrays.")
+
+            H = self.config.y_points 
+            W = self.config.x_points 
+            lon = x
+            lat = y
+
+            y_max = np.log(np.tan(np.pi / 4 + np.radians(self.config.config.lat_max) / 2))
+            y_min = np.log(np.tan(np.pi / 4 + np.radians(self.config.config.lat_min) / 2))
+            #lat/=y_max
+            map_x = ((lon / np.radians(self.config.config.lon_max)) * .5 + .5) * ( self.config.x_points )
+
+            print(y_max,y_min)
+            print(lat)
+            map_y = ((lat - y_min) / (y_max - y_min) )* self.config.y_points 
+            print(map_y)
+
+
+            logger.debug("XY grid coordinates transformed successfully.")
+            return map_x, map_y
+
+        except Exception as e:
+            logger.exception("Failed to transform XY grid coordinates to Mercator image coordinates.")
+            raise TransformationError(f"Mercator XY transformation failed: {e}")

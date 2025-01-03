@@ -192,8 +192,8 @@ class BaseProjectionConfig:
             AttributeError: If the parameter does not exist.
         """
         logger.debug(f"Accessing attribute '{item}'.")
-        if hasattr(self.params, item):
-            return getattr(self.params, item)
+        if hasattr(self.config_object, item):
+            return getattr(self.config_object, item)
         if item in self.extra_params:
             return self.extra_params[item]
         error_msg = f"'{type(self).__name__}' object has no attribute '{item}'"
@@ -930,21 +930,28 @@ class GnomonicTransformer:
             self._validate_inputs(lat, "lat")
             self._validate_inputs(lon, "lon")
             H, W = shape
-            map_x = self._compute_image_coords(lon, self.config.lon_min, self.config.lon_max, W)
-            map_y = self._compute_image_coords(lat, self.config.lat_max, self.config.lat_min, H)
+            map_x = self._compute_image_coords(
+                lon, self.config.lon_min, self.config.lon_max, W
+            )
+            map_y = self._compute_image_coords(
+                lat, self.config.lat_max, self.config.lat_min, H
+            )
             logger.debug("Latitude and longitude transformed successfully.")
             return map_x, map_y
         except Exception as e:
             logger.exception("Failed to transform latitude and longitude to image coordinates.")
             raise TransformationError(f"Gnomonic lat/lon transformation failed: {e}")
 
-    def xy_to_image_coords(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def xy_to_image_coords(
+        self, x: np.ndarray, y: np.ndarray, config: Any
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Transform XY grid coordinates to image coordinates.
 
         Args:
             x (np.ndarray): X grid coordinates.
             y (np.ndarray): Y grid coordinates.
+            config (Any): Configuration object.
 
         Returns:
             Tuple[np.ndarray, np.ndarray]: Image coordinates.
@@ -957,13 +964,13 @@ class GnomonicTransformer:
             self._validate_inputs(x, "x")
             self._validate_inputs(y, "y")
 
-            half_fov_rad = np.deg2rad(self.config.fov_deg / 2)
-            x_max = np.tan(half_fov_rad) * self.config.R
-            y_max = np.tan(half_fov_rad) * self.config.R
+            half_fov_rad = np.deg2rad(config.fov_deg / 2)
+            x_max = np.tan(half_fov_rad) * config.R
+            y_max = np.tan(half_fov_rad) * config.R
             x_min, y_min = -x_max, -y_max
 
-            map_x = self._compute_image_coords(x, x_min, x_max, self.config.x_points)
-            map_y = self._compute_image_coords(y, y_max, y_min, self.config.y_points)
+            map_x = self._compute_image_coords(x, x_min, x_max, config.x_points)
+            map_y = self._compute_image_coords(y, y_max, y_min, config.y_points)
             logger.debug("XY grid coordinates transformed successfully.")
             return map_x, map_y
         except Exception as e:
@@ -1029,7 +1036,7 @@ from ..exceptions import ConfigurationError
 logger = logging.getLogger('projection.mercator.config')
 
 class MercatorConfigModel(BaseModel):
-    R: float = Field(1, description="Radius of the sphere (in kilometers).")
+    R: float = Field(1., description="Radius of the sphere (in kilometers).")
     lon_min: float = Field(-180.0, description="Minimum longitude.")
     lon_max: float = Field(180.0, description="Maximum longitude.")
     lat_min: float = Field(-85.0, description="Minimum latitude (restricted for Mercator).")
@@ -1095,18 +1102,25 @@ class MercatorGridGeneration(BaseGridGeneration):
 
     def _create_grid(self, direction: str):
         if direction == 'forward':
-            lon = np.linspace(
-                self.config.config.lon_min, self.config.config.lon_max, self.config.config.x_points
-            )
-            lat = np.linspace(
-                self.config.config.lat_min, self.config.config.lat_max, self.config.config.y_points
-            )
+            
+            y_max = np.log(np.tan(np.pi / 4 + np.radians(self.config.config.lat_max) / 2))
+            y_min = np.log(np.tan(np.pi / 4 + np.radians(self.config.config.lat_min) / 2))
+            lat = np.linspace(y_min,y_max ,self.config.config.y_points)
+
+            lon = np.linspace(self.config.config.lon_min, self.config.config.lon_max, self.config.config.x_points)
+            lon = np.radians(lon)
+            
+            
+
             grid_lon, grid_lat = np.meshgrid(lon, lat)
+
             return grid_lon, grid_lat
         elif direction == 'backward':
-            x = np.linspace(-1, 1, self.config.config.x_points)
-            y = np.linspace(-1, 1, self.config.config.y_points)
-            return np.meshgrid(x, y)
+            x = np.linspace(self.config.config.lon_min, self.config.config.lon_max, self.config.config.x_points)
+            y = np.linspace(self.config.config.lat_max, self.config.config.lat_min, self.config.config.y_points)
+            map_y, map_x =  np.meshgrid(x, y)
+
+            return map_x, map_y
         else:
             raise ValueError("Invalid direction. Must be 'forward' or 'backward'.")
 
@@ -1123,61 +1137,111 @@ class MercatorProjectionStrategy(BaseProjectionStrategy):
     """
 
     def __init__(self, config):
-        self.config = config
+        if not hasattr(config, 'R'):
+            raise ValueError("Config object must have the necessary attributes (e.g., 'R').")
+        self.config = config  # Use the validated config object directly
 
     def forward(self, lon: np.ndarray, lat: np.ndarray):
         """
-        Convert geographic coordinates to Cartesian coordinates.
+        Convert geographic coordinates to Cartesian coordinates for Mercator projection.
+
+        Args:
+            lon (np.ndarray): Longitudes (degrees).
+            lat (np.ndarray): Latitudes (degrees).
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: Projected x, y coordinates.
         """
-        x = self.config.config.R * np.radians(lon)
-        y = self.config.config.R * np.log(np.tan(np.pi / 4 + np.radians(lat) / 2))
-        return x, y
+        logger.debug("Starting Mercator forward projection.")
+        try:
+            
+            # Calculate longitude and latitude
+            lon = lon / self.config.R
+            lat =  np.pi / 2 - 2 * np.arctan(np.e**(lat/ self.config.R))
+
+            logger.debug("Mercator forward projection computed successfully.")
+            print("MAX",lon.max(),lat.max())
+            return lat, lon # (lat,lon)
+
+        except Exception as e:
+            logger.exception("Failed during Mercator forward projection.")
+            raise ValueError(f"Mercator forward projection failed: {e}")
 
     def backward(self, x: np.ndarray, y: np.ndarray):
         """
-        Convert Cartesian coordinates to geographic coordinates.
+        Convert Cartesian coordinates to geographic coordinates for Mercator projection.
+
+        Args:
+            x (np.ndarray): X coordinates.
+            y (np.ndarray): Y coordinates.
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray, np.ndarray]: Longitudes, latitudes, and mask for valid coordinates.
         """
-        lon = np.degrees(x / self.config.config.R)
-        lat = np.degrees(2 * np.arctan(np.exp(y / self.config.config.R)) - np.pi / 2)
-        mask = (lon >= self.config.config.lon_min) & (lon <= self.config.config.lon_max) & \
-               (lat >= self.config.config.lat_min) & (lat <= self.config.config.lat_max)
-        return lon, lat, mask
+        logger.debug("Starting Mercator backward projection.")
+        try:
+            # Convert degrees to radians
+            lon_rad = np.radians(x)
+            lat_rad = np.radians(y)#_clamped)
+            
+
+            # Calculate x and y using Mercator projection formula
+            # Calculate x and y using Mercator projection formula
+            x = 1 * lon_rad
+            y = 1 * np.log(np.tan(np.pi / 4 + lat_rad / 2))
+
+
+            # Generate mask for valid coordinates
+            mask = np.ones_like(x) == 1
+
+            logger.debug("Mercator backward projection computed successfully.")
+            return x, y, mask
+
+        except Exception as e:
+            logger.exception("Failed during Mercator backward projection.")
+            raise ValueError(f"Mercator backward projection failed: {e}")
 
 ### /Users/robinsongarcia/projects/gnomonic/projection/mercator/transform.py ###
 from typing import Tuple, Any
 import numpy as np
 import logging
-from ..exceptions import TransformationError
+from ..exceptions import TransformationError, ConfigurationError
 
 logger = logging.getLogger('projection.mercator.transform')
 
+
 class MercatorTransformer:
     """
-    Transformation logic for Mercator projection.
+    Transformation logic for the Mercator projection.
     """
+
     def __init__(self, config):
         """
-        Initialize the GnomonicTransformer with the given configuration.
+        Initialize the MercatorTransformer with the given configuration.
 
         Args:
             config: Configuration object with necessary parameters.
         """
-        self.config = config  # Store the configuration object for use in transformations
-        
-    @staticmethod
+        required_attributes = ["lon_min", "lon_max", "lat_min", "lat_max", "x_points", "y_points"]
+        missing_attributes = [attr for attr in required_attributes if not hasattr(config, attr)]
+
+        if missing_attributes:
+            error_msg = f"Configuration object is missing required attributes: {', '.join(missing_attributes)}"
+            logger.error(error_msg)
+            raise ConfigurationError(error_msg)
+
+        self.config = config
+        logger.info("MercatorTransformer initialized successfully.")
+
     def latlon_to_image_coords(
-        lat: np.ndarray, 
-        lon: np.ndarray, 
-        config: Any, 
-        shape: Tuple[int, int]
+        self, lat: np.ndarray, lon: np.ndarray, shape: Tuple[int, int]
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Convert latitude and longitude to Mercator image coordinates.
 
         Args:
-            lat (np.ndarray): Latitude values.
-            lon (np.ndarray): Longitude values.
-            config (Any): Configuration object containing grid parameters.
+            lat (np.ndarray): Latitude values (degrees).
+            lon (np.ndarray): Longitude values (degrees).
             shape (Tuple[int, int]): Shape of the target image (height, width).
 
         Returns:
@@ -1186,32 +1250,32 @@ class MercatorTransformer:
         Raises:
             TransformationError: If input arrays are invalid or computation fails.
         """
-        logger.debug("Transforming lat/lon to Mercator image coordinates.")
+        logger.debug("Transforming latitude and longitude to Mercator image coordinates.")
         try:
+            if not isinstance(lat, np.ndarray) or not isinstance(lon, np.ndarray):
+                raise TypeError("Latitude and longitude must be numpy arrays.")
+
             H, W = shape
-            map_x = (lon - config.lon_min) / (config.lon_max - config.lon_min) * (W - 1)
 
-            lat_rad = np.radians(lat)
-            lat_min_rad = np.radians(config.lat_min)
-            lat_max_rad = np.radians(config.lat_max)
-            map_y = (
-                np.log(np.tan(np.pi / 4 + lat_rad / 2)) -
-                np.log(np.tan(np.pi / 4 + lat_min_rad / 2))
-            ) / (
-                np.log(np.tan(np.pi / 4 + lat_max_rad / 2)) -
-                np.log(np.tan(np.pi / 4 + lat_min_rad / 2))
-            ) * (H - 1)
+            # Normalize longitude
+            # Normalize x and y to image space
+            
+            x=lon
+            y=lat
+            map_x = ((x / np.pi) * .5 + .5) * (self.config.x_points - 1)
+            map_y = (1 + -1*(( y / (np.pi/2) )* .5 + .5 ))* (self.config.y_points - 1)
 
+            print("MAP", map_y.max(), map_x.max())
+            
+            logger.debug("Latitude and longitude transformed successfully.")
             return map_x, map_y
-        except Exception as e:
-            logger.exception("Failed to transform coordinates for Mercator projection.")
-            raise TransformationError(f"Mercator transformation failed: {e}")
 
-    @staticmethod
+        except Exception as e:
+            logger.exception("Failed to transform latitude and longitude to Mercator image coordinates.")
+            raise TransformationError(f"Mercator lat/lon transformation failed: {e}")
+
     def xy_to_image_coords(
-        x: np.ndarray, 
-        y: np.ndarray, 
-        config: Any
+        self, x: np.ndarray, y: np.ndarray, shape: Tuple[int, int]
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Transform XY grid coordinates to Mercator image coordinates.
@@ -1219,12 +1283,41 @@ class MercatorTransformer:
         Args:
             x (np.ndarray): X grid coordinates.
             y (np.ndarray): Y grid coordinates.
-            config (Any): Configuration object.
+            shape (Tuple[int, int]): Shape of the target image (height, width).
 
         Returns:
-            Tuple[np.ndarray, np.ndarray]: Image coordinates.
+            Tuple[np.ndarray, np.ndarray]: X and Y coordinates in image space.
+
+        Raises:
+            TransformationError: If input arrays are invalid or computation fails.
         """
-        raise NotImplementedError("Mercator backward transformation is not required.")
+        logger.debug("Transforming XY grid coordinates to Mercator image coordinates.")
+        try:
+            if not isinstance(x, np.ndarray) or not isinstance(y, np.ndarray):
+                raise TypeError("Grid coordinates must be numpy arrays.")
+
+            H = self.config.y_points 
+            W = self.config.x_points 
+            lon = x
+            lat = y
+
+            y_max = np.log(np.tan(np.pi / 4 + np.radians(self.config.config.lat_max) / 2))
+            y_min = np.log(np.tan(np.pi / 4 + np.radians(self.config.config.lat_min) / 2))
+            #lat/=y_max
+            map_x = ((lon / np.radians(self.config.config.lon_max)) * .5 + .5) * ( self.config.x_points )
+
+            print(y_max,y_min)
+            print(lat)
+            map_y = ((lat - y_min) / (y_max - y_min) )* self.config.y_points 
+            print(map_y)
+
+
+            logger.debug("XY grid coordinates transformed successfully.")
+            return map_x, map_y
+
+        except Exception as e:
+            logger.exception("Failed to transform XY grid coordinates to Mercator image coordinates.")
+            raise TransformationError(f"Mercator XY transformation failed: {e}")
 
 ### /Users/robinsongarcia/projects/gnomonic/projection/processor.py ###
 ### /Users/robinsongarcia/projects/gnomonic/projection/processor.py ###
@@ -1274,6 +1367,7 @@ class ProjectionProcessor:
             logger.exception(error_msg)
             raise ProcessingError(error_msg) from e
 
+    
     def forward(self, img: np.ndarray, **kwargs: Any) -> np.ndarray:
         """
         Forward projection of an image.
@@ -1308,9 +1402,7 @@ class ProjectionProcessor:
             lat, lon = self.projection.forward(x_grid, y_grid)
             logger.debug("Forward projection computed successfully.")
 
-            map_x, map_y = self.transformer.latlon_to_image_coords(
-                lat, lon, self.grid_generation.config, img.shape
-            )
+            map_x, map_y = self.transformer.latlon_to_image_coords(lat, lon, img.shape[:2])
             logger.debug("Coordinates transformed to image space successfully.")
 
             projected_img = self.interpolation.interpolate(img, map_x, map_y)
@@ -1358,14 +1450,15 @@ class ProjectionProcessor:
             x, y, mask = self.projection.backward(lat_grid, lon_grid)
             logger.debug("Backward projection computed successfully.")
 
-            map_x, map_y = self.transformer.xy_to_image_coords(x, y, self.grid_generation.config)
+            # Use config_object instead of `config.config`
+            map_x, map_y = self.transformer.xy_to_image_coords(x, y, self.config.config_object)
             logger.debug("Grid coordinates transformed to image space successfully.")
 
             back_projected_img = self.interpolation.interpolate(
-                rect_img, map_x, map_y, mask if kwargs.get("return_mask", False) else None
+                rect_img, map_x, map_y, mask if kwargs.get("return_mask", True) else None
             )
             logger.info("Backward projection completed successfully.")
-            return back_projected_img
+            return cv2.flip(back_projected_img,0)
 
         except (GridGenerationError, ProcessingError, TransformationError, InterpolationError) as e:
             logger.error(f"Backward projection failed: {e}")

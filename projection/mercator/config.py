@@ -7,7 +7,7 @@ from ..exceptions import ConfigurationError
 logger = logging.getLogger('projection.mercator.config')
 
 class MercatorConfigModel(BaseModel):
-    R: float = Field(1, description="Radius of the sphere (in kilometers).")
+    R: float = Field(1., description="Radius of the sphere (in kilometers).")
     lon_min: float = Field(-180.0, description="Minimum longitude.")
     lon_max: float = Field(180.0, description="Maximum longitude.")
     lat_min: float = Field(-85.0, description="Minimum latitude (restricted for Mercator).")

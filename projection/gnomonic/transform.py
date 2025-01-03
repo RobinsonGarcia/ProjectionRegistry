@@ -58,7 +58,7 @@ class GnomonicTransformer:
         return (values - min_val) / (max_val - min_val) * (size - 1)
 
     def latlon_to_image_coords(
-        self, lat: np.ndarray, lon: np.ndarray, config: Any, shape: Tuple[int, int]
+        self, lat: np.ndarray, lon: np.ndarray, shape: Tuple[int, int]
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Convert latitude and longitude to Gnomonic image coordinates.
@@ -66,7 +66,6 @@ class GnomonicTransformer:
         Args:
             lat (np.ndarray): Latitude values.
             lon (np.ndarray): Longitude values.
-            config (Any): Configuration object containing grid parameters.
             shape (Tuple[int, int]): Shape of the target image (height, width).
 
         Returns:
@@ -80,21 +79,28 @@ class GnomonicTransformer:
             self._validate_inputs(lat, "lat")
             self._validate_inputs(lon, "lon")
             H, W = shape
-            map_x = self._compute_image_coords(lon, config.lon_min, config.lon_max, W)
-            map_y = self._compute_image_coords(lat, config.lat_max, config.lat_min, H)
+            map_x = self._compute_image_coords(
+                lon, self.config.lon_min, self.config.lon_max, W
+            )
+            map_y = self._compute_image_coords(
+                lat, self.config.lat_max, self.config.lat_min, H
+            )
             logger.debug("Latitude and longitude transformed successfully.")
             return map_x, map_y
         except Exception as e:
             logger.exception("Failed to transform latitude and longitude to image coordinates.")
             raise TransformationError(f"Gnomonic lat/lon transformation failed: {e}")
 
-    def xy_to_image_coords(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def xy_to_image_coords(
+        self, x: np.ndarray, y: np.ndarray, config: Any
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Transform XY grid coordinates to image coordinates.
 
         Args:
             x (np.ndarray): X grid coordinates.
             y (np.ndarray): Y grid coordinates.
+            config (Any): Configuration object.
 
         Returns:
             Tuple[np.ndarray, np.ndarray]: Image coordinates.
@@ -107,13 +113,13 @@ class GnomonicTransformer:
             self._validate_inputs(x, "x")
             self._validate_inputs(y, "y")
 
-            half_fov_rad = np.deg2rad(self.config.fov_deg / 2)
-            x_max = np.tan(half_fov_rad) * self.config.R
-            y_max = np.tan(half_fov_rad) * self.config.R
+            half_fov_rad = np.deg2rad(config.fov_deg / 2)
+            x_max = np.tan(half_fov_rad) * config.R
+            y_max = np.tan(half_fov_rad) * config.R
             x_min, y_min = -x_max, -y_max
 
-            map_x = self._compute_image_coords(x, x_min, x_max, self.config.x_points)
-            map_y = self._compute_image_coords(y, y_max, y_min, self.config.y_points)
+            map_x = self._compute_image_coords(x, x_min, x_max, config.x_points)
+            map_y = self._compute_image_coords(y, y_max, y_min, config.y_points)
             logger.debug("XY grid coordinates transformed successfully.")
             return map_x, map_y
         except Exception as e:
