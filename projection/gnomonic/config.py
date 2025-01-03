@@ -8,24 +8,27 @@ from ..exceptions import ConfigurationError
 logger = logging.getLogger('gnomonic_projection.gnomonic.config')
 
 class GnomonicConfigModel(BaseModel):
-    R: float = Field(1.0, description="Radius of the sphere")
-    phi1_deg: float = Field(0.0, description="Latitude of the projection center")
-    lam0_deg: float = Field(0.0, description="Longitude of the projection center")
-    fov_deg: float = Field(90.0, description="Field of view in degrees")
-    x_points: int = Field(512, description="Number of grid points in x-direction")
-    y_points: int = Field(512, description="Number of grid points in y-direction")
-    lon_points: int = Field(1024, description="Number of longitude points for backward grid")
-    lat_points: int = Field(512, description="Number of latitude points for backward grid")
-    lon_min: float = Field(-180.0, description="Minimum longitude in the grid")
-    lon_max: float = Field(180.0, description="Maximum longitude in the grid")
-    lat_min: float = Field(-90.0, description="Minimum latitude in the grid")
-    lat_max: float = Field(90.0, description="Maximum latitude in the grid")
-    interpolation: Optional[int] = Field(default=cv2.INTER_LINEAR, description="Interpolation method for OpenCV remap")
-    borderMode: Optional[int] = Field(default=cv2.BORDER_CONSTANT, description="Border mode for OpenCV remap")
-    borderValue: Optional[Any] = Field(default=0, description="Border value for OpenCV remap")
+    R: float = Field(1.0, description="Radius of the sphere (e.g., Earth) in consistent units.")
+    phi1_deg: float = Field(0.0, description="Latitude of the projection center in degrees.")
+    lam0_deg: float = Field(0.0, description="Longitude of the projection center in degrees.")
+    fov_deg: float = Field(90.0, description="Field of view in degrees.")
+    x_points: int = Field(512, description="Number of grid points in the x-direction.")
+    y_points: int = Field(512, description="Number of grid points in the y-direction.")
+    lon_points: int = Field(1024, description="Number of longitude points for backward grid.")
+    lat_points: int = Field(512, description="Number of latitude points for backward grid.")
+    lon_min: float = Field(-180.0, description="Minimum longitude in the grid (degrees).")
+    lon_max: float = Field(180.0, description="Maximum longitude in the grid (degrees).")
+    lat_min: float = Field(-90.0, description="Minimum latitude in the grid (degrees).")
+    lat_max: float = Field(90.0, description="Maximum latitude in the grid (degrees).")
+    interpolation: Optional[int] = Field(default=cv2.INTER_LINEAR, description="Interpolation method for OpenCV remap.")
+    borderMode: Optional[int] = Field(default=cv2.BORDER_CONSTANT, description="Border mode for OpenCV remap.")
+    borderValue: Optional[Any] = Field(default=0, description="Border value for OpenCV remap.")
 
     @validator('fov_deg')
     def validate_fov(cls, v):
+        """
+        Validate that the field of view is between 0 and 180 degrees.
+        """
         if not (0 < v < 180):
             raise ValueError("Field of view (fov_deg) must be between 0 and 180 degrees.")
         return v
@@ -36,8 +39,38 @@ class GnomonicConfigModel(BaseModel):
 class GnomonicConfig:
     """
     Configuration class for Gnomonic projections using Pydantic for validation.
+
+    This class encapsulates all necessary parameters required to perform a Gnomonic projection.
+    It ensures that configurations are validated and managed efficiently.
+
+    ## Key Parameters:
+
+    - **R:** Radius of the sphere (e.g., Earth) in consistent units.
+    - **phi1_deg:** Latitude of the projection center in degrees.
+    - **lam0_deg:** Longitude of the projection center in degrees.
+    - **fov_deg:** Field of view in degrees.
+    - **x_points & y_points:** Grid resolution in the x and y directions.
+    - **lon_points & lat_points:** Resolution for backward grid mapping.
+    - **lon_min, lon_max, lat_min, lat_max:** Geographic bounds of the grid.
+    - **interpolation, borderMode, borderValue:** Parameters for image interpolation.
+
+    ## Mathematical Context:
+
+    The configuration parameters directly influence the projection equations derived from
+    spherical trigonometry. For instance, the field of view (`fov_deg`) determines the extent
+    of the projection on the plane, while the center coordinates (`phi1_deg`, `lam0_deg`)
+    establish the orientation of the projection.
     """
     def __init__(self, **kwargs: Any) -> None:
+        """
+        Initialize the GnomonicConfig with provided parameters.
+
+        Args:
+            **kwargs (Any): Configuration parameters as keyword arguments.
+
+        Raises:
+            ConfigurationError: If initialization fails due to invalid parameters.
+        """
         logger.debug("Initializing GnomonicConfig with parameters: %s", kwargs)
         try:
             self.config = GnomonicConfigModel(**kwargs)
@@ -48,6 +81,15 @@ class GnomonicConfig:
             raise ConfigurationError(error_msg) from e
 
     def update(self, **kwargs: Any) -> None:
+        """
+        Update configuration parameters dynamically.
+
+        Args:
+            **kwargs (Any): Parameters to update in the configuration.
+
+        Raises:
+            ConfigurationError: If updating fails due to invalid parameters.
+        """
         logger.debug(f"Updating GnomonicConfig with parameters: {kwargs}")
         try:
             updated_config = self.config.copy(update=kwargs)
@@ -59,6 +101,18 @@ class GnomonicConfig:
             raise ConfigurationError(error_msg) from e
 
     def __getattr__(self, item: str) -> Any:
+        """
+        Access configuration parameters as attributes.
+
+        Args:
+            item (str): Parameter name.
+
+        Returns:
+            Any: The value of the parameter if it exists.
+
+        Raises:
+            AttributeError: If the parameter does not exist.
+        """
         logger.debug(f"Accessing GnomonicConfig attribute '{item}'.")
         try:
             return getattr(self.config, item)
@@ -68,4 +122,10 @@ class GnomonicConfig:
             raise AttributeError(error_msg) from None
 
     def __repr__(self) -> str:
+        """
+        String representation of the configuration.
+
+        Returns:
+            str: Human-readable string of configuration parameters.
+        """
         return f"GnomonicConfig({self.config.dict()})"
