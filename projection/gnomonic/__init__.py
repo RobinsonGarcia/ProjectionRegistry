@@ -131,7 +131,7 @@ from .config import GnomonicConfig
 from .strategy import GnomonicProjectionStrategy
 from .grid import GnomonicGridGeneration
 from ..logging_config import setup_logging
-
+#from ..base.processor import BaseProjectionProcessor
 # Initialize logger for this module
 logger = logging.getLogger('gnomonic_projection.gnomonic')
 
@@ -148,6 +148,8 @@ def initialize_gnomonic_module():
 
 # Call the initialization function upon import
 initialize_gnomonic_module()
+
+
 
 __all__ = [
     "GnomonicConfig",

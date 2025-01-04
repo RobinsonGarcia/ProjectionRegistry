@@ -10,6 +10,12 @@ from .mercator.grid import MercatorGridGeneration
 from .mercator.strategy import MercatorProjectionStrategy
 from .mercator.transform import MercatorTransformer  # Updated to per-projection transformer
 
+# Import the oblique mercator components
+from .oblique_mercator.config import ObliqueMercatorConfig
+from .oblique_mercator.grid import ObliqueMercatorGridGeneration
+from .oblique_mercator.strategy import ObliqueMercatorProjectionStrategy
+from .oblique_mercator.transform import ObliqueMercatorTransformer
+
 from .base.interpolation import BaseInterpolation
 from .exceptions import RegistrationError
 import logging
@@ -41,6 +47,15 @@ def register_default_projections():
             "projection_strategy": MercatorProjectionStrategy,
             "interpolation": BaseInterpolation,
             "transformer": MercatorTransformer,  # Updated to MercatorTransformer
+        })
+
+        # Register Oblique Mercator
+        ProjectionRegistry.register("oblique_mercator", {
+            "config": ObliqueMercatorConfig,
+            "grid_generation": ObliqueMercatorGridGeneration,
+            "projection_strategy": ObliqueMercatorProjectionStrategy,
+            "interpolation": BaseInterpolation,  # or your own custom interpolation
+            "transformer": ObliqueMercatorTransformer
         })
         logger.info("Default projection 'mercator' registered successfully.")
 
