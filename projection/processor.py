@@ -2,7 +2,6 @@
 
 from typing import Any, Optional, Tuple
 from .base.config import BaseProjectionConfig
-from .base.transform import CoordinateTransformer
 from .exceptions import ProcessingError, InterpolationError, GridGenerationError, TransformationError
 import logging
 import cv2
@@ -74,13 +73,13 @@ class ProjectionProcessor:
             self.config.update(**kwargs)
             logger.debug(f"Configuration updated with parameters: {kwargs}")
 
-            x_grid, y_grid = self.grid_generation.create_grid('forward')
+            x_grid, y_grid = self.grid_generation.projection_grid()
             logger.debug("Forward grid generated successfully.")
 
-            lat, lon = self.projection.forward(x_grid, y_grid)
+            lat, lon = self.projection.from_projection_to_spherical(x_grid, y_grid)
             logger.debug("Forward projection computed successfully.")
 
-            map_x, map_y = self.transformer.latlon_to_image_coords(lat, lon, img.shape[:2])
+            map_x, map_y = self.transformer.spherical_to_image_coords(lat, lon, img.shape[:2])
             logger.debug("Coordinates transformed to image space successfully.")
 
             projected_img = self.interpolation.interpolate(img, map_x, map_y)
@@ -122,14 +121,14 @@ class ProjectionProcessor:
             self.config.update(**kwargs)
             logger.debug(f"Configuration updated with parameters: {kwargs}")
 
-            lon_grid, lat_grid = self.grid_generation.create_grid('backward')
+            lon_grid, lat_grid = self.grid_generation.spherical_grid()
             logger.debug("Backward grid generated successfully.")
 
-            x, y, mask = self.projection.backward(lat_grid, lon_grid)
+            x, y, mask = self.projection.from_spherical_to_projection(lat_grid, lon_grid)
             logger.debug("Backward projection computed successfully.")
 
             # Use config_object instead of `config.config`
-            map_x, map_y = self.transformer.xy_to_image_coords(x, y, self.config.config_object)
+            map_x, map_y = self.transformer.projection_to_image_coords(x, y, self.config.config_object)
             logger.debug("Grid coordinates transformed to image space successfully.")
 
             back_projected_img = self.interpolation.interpolate(

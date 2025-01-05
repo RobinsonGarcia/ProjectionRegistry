@@ -14,7 +14,7 @@ class MercatorProjectionStrategy(BaseProjectionStrategy):
             raise ValueError("Config object must have the necessary attributes (e.g., 'R').")
         self.config = config  # Use the validated config object directly
 
-    def forward(self, lon: np.ndarray, lat: np.ndarray):
+    def from_spherical_to_projection(self, lon: np.ndarray, lat: np.ndarray):
         """
         Convert geographic coordinates to Cartesian coordinates for Mercator projection.
 
@@ -40,7 +40,7 @@ class MercatorProjectionStrategy(BaseProjectionStrategy):
             logger.exception("Failed during Mercator forward projection.")
             raise ValueError(f"Mercator forward projection failed: {e}")
 
-    def backward(self, x: np.ndarray, y: np.ndarray):
+    def from_projection_to_spherical(self, x: np.ndarray, y: np.ndarray):
         """
         Convert Cartesian coordinates to geographic coordinates for Mercator projection.
 

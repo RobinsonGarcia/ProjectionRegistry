@@ -43,7 +43,7 @@ class GnomonicProjectionStrategy(BaseProjectionStrategy):
         self.config: GnomonicConfig = config
         logger.info("GnomonicProjectionStrategy initialized successfully.")
 
-    def forward(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def from_projection_to_spherical(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         Perform inverse Gnomonic projection from planar grid coordinates to geographic coordinates.
 
@@ -99,7 +99,7 @@ class GnomonicProjectionStrategy(BaseProjectionStrategy):
             logger.exception(error_msg)
             raise ProcessingError(error_msg) from e
 
-    def backward(self, lat: np.ndarray, lon: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def from_spherical_to_projection(self, lat: np.ndarray, lon: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Perform forward Gnomonic projection from geographic coordinates to planar grid coordinates.
 

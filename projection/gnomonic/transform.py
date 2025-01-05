@@ -2,11 +2,11 @@ from typing import Tuple, Any
 import numpy as np
 import logging
 from ..exceptions import TransformationError, ConfigurationError
-
+from ..base.transform import BaseCoordinateTransformer
 # Configure logger for the transformation module
 logger = logging.getLogger('gnomonic_projection.gnomonic.transform')
 
-class GnomonicTransformer:
+class GnomonicTransformer(BaseCoordinateTransformer):
     """
     Transformation Logic for Gnomonic Projection.
 
@@ -106,7 +106,7 @@ class GnomonicTransformer:
         logger.debug(f"Computed normalized image coordinates: {normalized}")
         return normalized
 
-    def latlon_to_image_coords(
+    def spherical_to_image_coords(
         self, lat: np.ndarray, lon: np.ndarray, shape: Tuple[int, int]
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -157,7 +157,7 @@ class GnomonicTransformer:
             logger.exception("Failed to transform latitude and longitude to image coordinates.")
             raise TransformationError(f"Gnomonic lat/lon transformation failed: {e}")
 
-    def xy_to_image_coords(
+    def projection_to_image_coords(
         self, x: np.ndarray, y: np.ndarray, config: Any
     ) -> Tuple[np.ndarray, np.ndarray]:
         """

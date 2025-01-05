@@ -12,7 +12,8 @@ class BaseProjectionStrategy:
     """
     Base class for projection strategies.
     """
-    def forward(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    @classmethod
+    def from_spherical_to_projection(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         Perform forward projection from grid coordinates to latitude and longitude.
 
@@ -34,7 +35,8 @@ class BaseProjectionStrategy:
         logger.debug("Forward projection inputs are valid.")
         raise NotImplementedError("Subclasses must implement forward.")
 
-    def backward(self, lat: np.ndarray, lon: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    @classmethod
+    def from_projection_to_spherical(self, lat: np.ndarray, lon: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Perform backward projection from latitude and longitude to grid coordinates.
 

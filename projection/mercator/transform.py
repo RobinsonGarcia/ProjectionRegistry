@@ -2,11 +2,11 @@ from typing import Tuple, Any
 import numpy as np
 import logging
 from ..exceptions import TransformationError, ConfigurationError
-
+from ..base.transform import BaseCoordinateTransformer
 logger = logging.getLogger('projection.mercator.transform')
 
 
-class MercatorTransformer:
+class MercatorTransformer(BaseCoordinateTransformer):
     """
     Transformation logic for the Mercator projection.
     """
@@ -29,7 +29,7 @@ class MercatorTransformer:
         self.config = config
         logger.info("MercatorTransformer initialized successfully.")
 
-    def latlon_to_image_coords(
+    def spherical_to_image_coords(
         self, lat: np.ndarray, lon: np.ndarray, shape: Tuple[int, int]
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -70,7 +70,7 @@ class MercatorTransformer:
             logger.exception("Failed to transform latitude and longitude to Mercator image coordinates.")
             raise TransformationError(f"Mercator lat/lon transformation failed: {e}")
 
-    def xy_to_image_coords(
+    def from_projection_to_image_coords(
         self, x: np.ndarray, y: np.ndarray, shape: Tuple[int, int]
     ) -> Tuple[np.ndarray, np.ndarray]:
         """

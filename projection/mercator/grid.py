@@ -8,30 +8,18 @@ class MercatorGridGeneration(BaseGridGeneration):
     """
     Grid generation for Mercator projection.
     """
+    
 
-    def __init__(self, config):
-        self.config = config
-
-    def _create_grid(self, direction: str):
-        if direction == 'forward':
-            
-            y_max = np.log(np.tan(np.pi / 4 + np.radians(self.config.config.lat_max) / 2))
-            y_min = np.log(np.tan(np.pi / 4 + np.radians(self.config.config.lat_min) / 2))
-            lat = np.linspace(y_min,y_max ,self.config.config.y_points)
-
-            lon = np.linspace(self.config.config.lon_min, self.config.config.lon_max, self.config.config.x_points)
-            lon = np.radians(lon)
-            
-            
-
-            grid_lon, grid_lat = np.meshgrid(lon, lat)
-
-            return grid_lon, grid_lat
-        elif direction == 'backward':
-            x = np.linspace(self.config.config.lon_min, self.config.config.lon_max, self.config.config.x_points)
-            y = np.linspace(self.config.config.lat_max, self.config.config.lat_min, self.config.config.y_points)
-            map_y, map_x =  np.meshgrid(x, y)
-
-            return map_x, map_y
-        else:
-            raise ValueError("Invalid direction. Must be 'forward' or 'backward'.")
+    def spherical_grid(self):     
+        y_max = np.log(np.tan(np.pi / 4 + np.radians(self.config.config.lat_max) / 2))
+        y_min = np.log(np.tan(np.pi / 4 + np.radians(self.config.config.lat_min) / 2))
+        lat = np.linspace(y_min,y_max ,self.config.config.y_points)
+        lon = np.linspace(self.config.config.lon_min, self.config.config.lon_max, self.config.config.x_points)
+        lon = np.radians(lon)
+        grid_lon, grid_lat = np.meshgrid(lon, lat)
+        return grid_lon, grid_lat
+    def projection_grid(self):
+        x = np.linspace(self.config.config.lon_min, self.config.config.lon_max, self.config.config.x_points)
+        y = np.linspace(self.config.config.lat_max, self.config.config.lat_min, self.config.config.y_points)
+        map_y, map_x =  np.meshgrid(x, y)
+        return map_x, map_y
