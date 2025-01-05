@@ -8,8 +8,6 @@ class MercatorGridGeneration(BaseGridGeneration):
     """
     Grid generation for Mercator projection.
     """
-    
-
     def projection_grid(self):     
         y_max = np.log(np.tan(np.pi / 4 + np.radians(self.config.config.lat_max) / 2))
         y_min = np.log(np.tan(np.pi / 4 + np.radians(self.config.config.lat_min) / 2))

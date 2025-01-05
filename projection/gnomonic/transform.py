@@ -110,6 +110,9 @@ class GnomonicTransformer(BaseCoordinateTransformer):
         self, lat: np.ndarray, lon: np.ndarray, shape: Tuple[int, int]
     ) -> Tuple[np.ndarray, np.ndarray]:
         H, W = shape  # Extract image height and width
+        print(lat)
+        print(lat.max())
+        lon[lon>180] = 180 - lon[lon>180]
         lat[lat>90] = -90 + lat[lat>90]
         map_x = self._compute_image_coords(
             lon, self.config.lon_min, self.config.lon_max, W
