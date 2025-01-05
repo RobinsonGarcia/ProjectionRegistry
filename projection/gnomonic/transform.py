@@ -109,101 +109,31 @@ class GnomonicTransformer(BaseCoordinateTransformer):
     def spherical_to_image_coords(
         self, lat: np.ndarray, lon: np.ndarray, shape: Tuple[int, int]
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Convert geographic coordinates (latitude and longitude) to image coordinates.
+        H, W = shape  # Extract image height and width
+        lat[lat>90] = -90 + lat[lat>90]
+        map_x = self._compute_image_coords(
+            lon, self.config.lon_min, self.config.lon_max, W
+        )
+        map_y = self._compute_image_coords(
+            lat, self.config.lat_max, self.config.lat_min, H
+        )
+        return map_x, map_y
 
-        This method maps the geographic coordinates from an equirectangular (input) image
-        to planar grid coordinates on the Gnomonic projection plane. The resulting image
-        coordinates (`map_x`, `map_y`) are essential for interpolating the input image
-        onto the projection plane accurately.
-
-        Args:
-            lat (np.ndarray): Latitude values in degrees.
-            lon (np.ndarray): Longitude values in degrees.
-            shape (Tuple[int, int]): Shape of the target image as (height, width).
-
-        Returns:
-            Tuple[np.ndarray, np.ndarray]: X and Y coordinates in image space suitable for interpolation.
-
-        Raises:
-            TransformationError: If input arrays are invalid or if computation fails.
-            ConfigurationError: If the configuration lacks required attributes.
-        """
-        logger.debug("Transforming geographic coordinates (lat/lon) to image coordinates.")
-        try:
-            # Validate that latitude and longitude inputs are NumPy arrays
-            self._validate_inputs(lat, "lat")
-            self._validate_inputs(lon, "lon")
-            H, W = shape  # Extract image height and width
-            logger.debug(f"Target image shape: Height={H}, Width={W}")
-
-            # Normalize longitude to the image width based on geographic bounds
-            map_x = self._compute_image_coords(
-                lon, self.config.lon_min, self.config.lon_max, W
-            )
-            logger.debug("Normalized longitude to image X coordinates.")
-
-            # Normalize latitude to the image height based on geographic bounds
-            # Note: Latitude is typically mapped from top (max_lat) to bottom (min_lat)
-            map_y = self._compute_image_coords(
-                lat, self.config.lat_max, self.config.lat_min, H
-            )
-            logger.debug("Normalized latitude to image Y coordinates.")
-
-            logger.debug("Latitude and longitude transformed successfully.")
-            return map_x, map_y
-        except Exception as e:
-            # Log the exception with traceback and raise a TransformationError
-            logger.exception("Failed to transform latitude and longitude to image coordinates.")
-            raise TransformationError(f"Gnomonic lat/lon transformation failed: {e}")
 
     def projection_to_image_coords(
         self, x: np.ndarray, y: np.ndarray, config: Any
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Transform planar grid coordinates (x, y) to image coordinates.
+    
+        half_fov_rad = np.deg2rad(config.fov_deg / 2)  # Convert half FOV to radians
+        x_max = np.tan(half_fov_rad) * config.R          # Maximum X value based on FOV
+        y_max = np.tan(half_fov_rad) * config.R          # Maximum Y value based on FOV
+        x_min, y_min = -x_max, -y_max                    # Define minimum X and Y values
 
-        This method maps the planar grid coordinates from the Gnomonic projection plane
-        to corresponding image coordinates in the output equirectangular image. The resulting
-        image coordinates (`map_x`, `map_y`) are used for interpolating the projected image
-        back to an equirectangular format.
+        # Normalize planar X coordinates to image width based on grid bounds
+        map_x = self._compute_image_coords(x, x_min, x_max, config.x_points)
 
-        Args:
-            x (np.ndarray): X grid coordinates in planar space.
-            y (np.ndarray): Y grid coordinates in planar space.
-            config (Any): Configuration object containing projection parameters.
+        # Normalize planar Y coordinates to image height based on grid bounds
+        # Note: Y coordinates are typically mapped from top (y_max) to bottom (y_min)
+        map_y = self._compute_image_coords(y, y_max, y_min, config.y_points)
 
-        Returns:
-            Tuple[np.ndarray, np.ndarray]: X and Y coordinates in image space suitable for interpolation.
-
-        Raises:
-            TransformationError: If input arrays are invalid or if computation fails.
-        """
-        logger.debug("Transforming planar grid coordinates (x/y) to image coordinates.")
-        try:
-            # Validate that x and y inputs are NumPy arrays
-            self._validate_inputs(x, "x")
-            self._validate_inputs(y, "y")
-
-            # Compute grid bounds based on field of view and Earth's radius
-            half_fov_rad = np.deg2rad(config.fov_deg / 2)  # Convert half FOV to radians
-            x_max = np.tan(half_fov_rad) * config.R          # Maximum X value based on FOV
-            y_max = np.tan(half_fov_rad) * config.R          # Maximum Y value based on FOV
-            x_min, y_min = -x_max, -y_max                    # Define minimum X and Y values
-            logger.debug(f"Computed grid bounds: x_min={x_min}, x_max={x_max}, y_min={y_min}, y_max={y_max}")
-
-            # Normalize planar X coordinates to image width based on grid bounds
-            map_x = self._compute_image_coords(x, x_min, x_max, config.x_points)
-            logger.debug("Normalized planar X to image coordinates.")
-
-            # Normalize planar Y coordinates to image height based on grid bounds
-            # Note: Y coordinates are typically mapped from top (y_max) to bottom (y_min)
-            map_y = self._compute_image_coords(y, y_max, y_min, config.y_points)
-            logger.debug("Normalized planar Y to image coordinates.")
-
-            logger.debug("Planar grid coordinates transformed successfully.")
-            return map_x, map_y
-        except Exception as e:
-            # Log the exception with traceback and raise a TransformationError
-            logger.exception("Failed to transform XY grid coordinates to image coordinates.")
-            raise TransformationError(f"Gnomonic XY transformation failed: {e}")
+        return map_x, map_y

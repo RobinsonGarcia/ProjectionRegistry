@@ -70,7 +70,7 @@ class MercatorTransformer(BaseCoordinateTransformer):
             logger.exception("Failed to transform latitude and longitude to Mercator image coordinates.")
             raise TransformationError(f"Mercator lat/lon transformation failed: {e}")
 
-    def from_projection_to_image_coords(
+    def projection_to_image_coords(
         self, x: np.ndarray, y: np.ndarray, shape: Tuple[int, int]
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
