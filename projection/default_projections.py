@@ -12,10 +12,11 @@ from .mercator.grid import MercatorGridGeneration
 from .mercator.strategy import MercatorProjectionStrategy
 from .mercator.transform import MercatorTransformer  # Updated to per-projection transformer
 
-from .oblique_mercator.config import ObliqueMercatorConfig
-from .oblique_mercator.grid import ObliqueMercatorGridGeneration
-from .oblique_mercator.strategy import ObliqueMercatorProjectionStrategy
-from .oblique_mercator.transform import ObliqueMercatorTransformer
+# Import your classes
+from .stereographic.config import StereographicConfig
+from .stereographic.grid import StereographicGridGeneration
+from .stereographic.strategy import StereographicProjectionStrategy
+from .stereographic.transform import StereographicTransformer
 
 from .base.interpolation import BaseInterpolation
 from .exceptions import RegistrationError
@@ -52,14 +53,14 @@ def register_default_projections():
             "transformer": MercatorTransformer,  # Updated to MercatorTransformer
         })
 
-        # Register Oblique Mercator
-        ProjectionRegistry.register("oblique_mercator", {
-            "config": ObliqueMercatorConfig,
-            "grid_generation": ObliqueMercatorGridGeneration,
-            "projection_strategy": ObliqueMercatorProjectionStrategy,
-            "interpolation": BaseInterpolation,  # or your own custom interpolation
-            "transformer": ObliqueMercatorTransformer
-        })
+
+        ProjectionRegistry.register("stereographic", {
+        "config": StereographicConfig,
+        "grid_generation": StereographicGridGeneration,
+        "projection_strategy": StereographicProjectionStrategy,
+        "interpolation": BaseInterpolation,           # or your own
+        "transformer": StereographicTransformer,       # or your own
+    })
         logger.info("Default projection 'mercator' registered successfully.")
 
     except RegistrationError as e:

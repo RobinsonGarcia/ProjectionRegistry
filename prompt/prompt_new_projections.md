@@ -1,120 +1,88 @@
-Below is a step-by-step guide on how to create and integrate a new projection into this framework, similar to how **gnomonic** and **mercator** projections were added. The explanation covers both conceptual and implementation details. By following these steps, you’ll end up with a fully functional forward (equirectangular → your projection) and backward (your projection → equirectangular) transformation pipeline.
+Below is a step-by-step guide to implement a new projection type in your Python package. These instructions reference the Gnomonic projection implementation as a guiding example. The key requirement is that your new projection must define four primary components:
+	1.	Configuration (config.py): Defines and validates user-facing parameters (e.g., radius, lat/lon bounds).
+	2.	Grid Generation (grid.py): Produces forward and backward grids (e.g., projection grids vs. spherical grids).
+	3.	Projection Strategy (strategy.py): Encodes the forward and inverse mapping math between spherical (lat/lon) and planar coordinates.
+	4.	Coordinate Transform (transform.py): Converts between (lat/lon or x/y) and final image coordinates.
 
----
+Finally, you must register your new projection in the ProjectionRegistry. Below, each numbered section outlines how to implement and wire up these components.
 
-## 1. **Conceptual Overview**
+# 1. Create Your Projection Folder and Files
 
-1. **Equirectangular (Spherical) Space**  
-   - We use equirectangular images as the “sphere” representation.  
-   - In an equirectangular image, the x-axis corresponds to longitude (typically \(-180^\circ\) to \(+180^\circ\)) and the y-axis corresponds to latitude (\(+90^\circ\) to \(-90^\circ\)).
-
-2. **Forward Method** (`processor.forward(img)`)  
-   - **Goal**: Transform from spherical (equirectangular) coordinates to your new projection’s coordinates.  
-   - **Steps**:  
-     a. Generate a **projection grid** \((x, y)\) in your new projection’s coordinate system.  
-     b. Convert that \((x, y)\) to \((\text{lat}, \text{lon})\) using your projection’s **inverse** equations (a.k.a. `_from_projection_to_spherical`).  
-     c. Map lat/lon onto the input equirectangular image by computing the appropriate (map_x, map_y) in equirectangular space.  
-     d. Interpolate the pixels from the original image to produce the final forward-projected image.
-
-3. **Backward Method** (`processor.backward(img)`)  
-   - **Goal**: Transform from your new projection’s coordinates back to spherical (equirectangular).  
-   - **Steps**:  
-     a. Generate a **spherical grid** \((\text{lon}, \text{lat})\).  
-     b. Convert that \((\text{lat}, \text{lon})\) to the projection coordinate system \((x, y)\) using your projection’s **forward** equations (a.k.a. `_from_spherical_to_projection`).  
-     c. Map \((x, y)\) into the coordinate space of the input “rectilinear” image using `projection_to_image_coords`, then interpolate.
-
-4. **Classes Involved**  
-   - **`BaseProjectionConfig`**: Holds parameters such as `lon_min`, `lon_max`, `lat_min`, `lat_max`, `fov_deg`, `x_points`, `y_points`, interpolation options, etc.  
-   - **`BaseGridGeneration`**: Generates the coordinate grids needed for forward/backward transformations.  
-   - **`BaseProjectionStrategy`**: Implements the core forward (`_from_spherical_to_projection`) and inverse (`_from_projection_to_spherical`) mathematical logic.  
-   - **`BaseCoordinateTransformer`**: Handles the mapping of lat/lon or (x, y) to image pixel coordinates.  
-   - **`BaseInterpolation`**: Performs the actual image remapping (e.g., via OpenCV).
-
-5. **Registry & Processor**  
-   - **`ProjectionRegistry`**: A central place that knows about all projections. Each projection is “registered” here.  
-   - **`ProjectionProcessor`**: Uses the configuration, grid generation, projection strategy, transformer, and interpolation to run the forward/backward pipelines in one high-level call (`processor.forward(...)` or `processor.backward(...)`).
-
----
-
-## 2. **Directory and File Setup**
-
-Following the pattern for `gnomonic/` and `mercator/`, create a new folder for your projection, for example, **`my_projection/`**:
-
-
-projection/
-   ...
-   ├── my_projection/
-   │   ├── __init__.py
-   │   ├── config.py
-   │   ├── grid.py
-   │   ├── strategy.py
-   │   └── transform.py
-   ...
-
-
-### 2.1 `__init__.py`
-Inside `my_projection/__init__.py`, you can optionally expose only the classes you want to be publicly visible. For instance:
+Start by creating a new folder under projection/ with the name of your new projection (e.g., projection/my_projection/):
 
 ```python
-from .config import MyProjectionConfig
-from .grid import MyProjectionGridGeneration
-from .strategy import MyProjectionStrategy
-from .transform import MyProjectionTransformer
+projection/
+    ...
+    my_projection/
+        __init__.py
+        config.py
+        grid.py
+        strategy.py
+        transform.py
 
-__all__ = [
-    "MyProjectionConfig",
-    "MyProjectionGridGeneration",
-    "MyProjectionStrategy",
-    "MyProjectionTransformer",
-]
 ```
 
-## 3. Create a Config Class (config.py)
+# 2. Implement the Configuration (config.py)
 
-Your configuration class should hold and validate parameters needed for your projection. It usually follows this structure:
-	1.	A Pydantic model (e.g., MyProjectionConfigModel) describing your settings.
-	2.	A Python class (e.g., MyProjectionConfig) that wraps the model and implements methods like update for dynamic reconfiguration.
+Your new configuration file should contain two main pieces:
+	1.	A Pydantic model class that defines and validates the parameters for your projection.
+	2.	A configuration-wrapper class that can be used by the rest of the system (particularly BaseProjectionConfig).
 
-Example:
+Below is a minimal structure, taking gnomonic/config.py as an example.
 
 ```python
 # my_projection/config.py
+
+import logging
 from typing import Any, Optional
 from pydantic import BaseModel, Field, validator
 import cv2
-import logging
+
 from ..exceptions import ConfigurationError
 
-logger = logging.getLogger('my_projection.config')
+logger = logging.getLogger("projection.my_projection.config")
 
 class MyProjectionConfigModel(BaseModel):
-    # Example fields; adjust for your math
-    R: float = Field(6371.0, description="Planet radius.")
-    center_lat: float = Field(0.0, description="Center latitude for the projection.")
-    center_lon: float = Field(0.0, description="Center longitude for the projection.")
-    # Possibly a field-of-view, or other domain-specific parameters
-    fov_deg: float = Field(90.0, description="Field of view in degrees.")
-    x_points: int = Field(512, description="Resolution in x-direction.")
-    y_points: int = Field(512, description="Resolution in y-direction.")
-    lon_min: float = Field(-180.0, description="Minimum longitude in equirectangular space.")
-    lon_max: float = Field(180.0, description="Maximum longitude in equirectangular space.")
-    lat_min: float = Field(-90.0, description="Minimum latitude in equirectangular space.")
-    lat_max: float = Field(90.0, description="Maximum latitude in equirectangular space.")
+    """
+    Pydantic model for MyProjection projection configuration.
+    Define all the parameters your projection needs:
+      - R (radius)
+      - center latitude, center longitude
+      - bounding box for lat/lon
+      - resolution
+      - interpolation settings
+      - etc.
+    """
+    R: float = Field(6371.0, description="Radius of the Earth (or sphere) in kilometers.")
+    phi0_deg: float = Field(0.0, description="Latitude center in degrees.")
+    lam0_deg: float = Field(0.0, description="Longitude center in degrees.")
+    # Add as many fields as required by your math...
+    
+    x_points: int = Field(512, description="Number of points in x-direction.")
+    y_points: int = Field(512, description="Number of points in y-direction.")
+    
+    lon_min: float = Field(-180.0, description="Min longitude for grid.")
+    lon_max: float = Field(180.0, description="Max longitude for grid.")
+    lat_min: float = Field(-90.0, description="Min latitude for grid.")
+    lat_max: float = Field(90.0, description="Max latitude for grid.")
+    
     interpolation: Optional[int] = Field(default=cv2.INTER_LINEAR, description="OpenCV interpolation mode.")
     borderMode: Optional[int] = Field(default=cv2.BORDER_CONSTANT, description="OpenCV border mode.")
     borderValue: Optional[Any] = Field(default=0, description="OpenCV border value.")
 
-    @validator('fov_deg')
-    def validate_fov(cls, v):
-        if not (0 < v < 180):
-            raise ValueError("Field of view (fov_deg) must be >0 and <180.")
+    @validator("R")
+    def validate_radius(cls, v):
+        if v <= 0:
+            raise ValueError("Sphere/Earth radius must be > 0.")
         return v
 
-    class Config:
-        arbitrary_types_allowed = True
-
 class MyProjectionConfig:
-    def __init__(self, **kwargs: Any):
+    """
+    Wrapper for MyProjectionConfigModel to be used by the rest of the system.
+    Mirrors the design of GnomonicConfig, MercatorConfig, etc.
+    """
+
+    def __init__(self, **kwargs: Any) -> None:
         logger.debug("Initializing MyProjectionConfig with parameters: %s", kwargs)
         try:
             self.config = MyProjectionConfigModel(**kwargs)
@@ -125,16 +93,24 @@ class MyProjectionConfig:
             raise ConfigurationError(error_msg) from e
 
     def update(self, **kwargs: Any) -> None:
+        """
+        Dynamically update the projection parameters.
+        """
         logger.debug(f"Updating MyProjectionConfig with parameters: {kwargs}")
         try:
-            updated = self.config.copy(update=kwargs)
-            self.config = updated
+            updated_config = self.config.copy(update=kwargs)
+            self.config = updated_config
+            logger.info("MyProjectionConfig updated successfully.")
         except Exception as e:
             error_msg = f"Failed to update MyProjectionConfig: {e}"
             logger.exception(error_msg)
             raise ConfigurationError(error_msg) from e
 
     def __getattr__(self, item: str) -> Any:
+        """
+        Access the pydantic config fields as attributes.
+        """
+        logger.debug(f"Accessing MyProjectionConfig attribute '{item}'.")
         try:
             return getattr(self.config, item)
         except AttributeError:
@@ -143,288 +119,293 @@ class MyProjectionConfig:
             raise AttributeError(error_msg)
 
     def __repr__(self) -> str:
+        """
+        String representation for debugging/logging.
+        """
         return f"MyProjectionConfig({self.config.dict()})"
+
 ```
+Key points for config:
+	•	Subclass BaseModel for strong validation and documentation.
+	•	Provide a simple wrapper class (like MyProjectionConfig) that will be used by the registry and the BaseProjectionConfig logic.
 
-## 4. Create a Grid Generation Class (grid.py)
 
-Your projection may require a custom approach to generate the forward “projection grid” and the backward “spherical grid.” For instance:
+# 3. Implement the Grid Generation (grid.py)
+
+Your new projection’s grid module must extend BaseGridGeneration and implement two main methods:
+	1.	projection_grid(): Usually returns (X, Y) arrays for forward projection.
+	2.	spherical_grid(): Usually returns (lon, lat) arrays for backward projection.
+
+Using gnomonic/grid.py as a pattern:
 
 ```python
 # my_projection/grid.py
-import numpy as np
+
 import logging
+import numpy as np
 from typing import Tuple
 from ..base.grid import BaseGridGeneration
+from ..exceptions import GridGenerationError
 
-logger = logging.getLogger('my_projection.grid')
+logger = logging.getLogger("projection.my_projection.grid")
 
 class MyProjectionGridGeneration(BaseGridGeneration):
-    def _projection_grid(self) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Generate a (x_grid, y_grid) for forward projection.
-        - Typically covers the extent you plan to project.
-        """
-        half_fov_rad = np.deg2rad(self.config.fov_deg / 2)
-        # Example: Extent in X/Y = R * tan(FOV/2)
-        x_extent = np.tan(half_fov_rad) * self.config.R
-        y_extent = np.tan(half_fov_rad) * self.config.R
+    """
+    Generates forward and backward grids for MyProjection.
+    """
 
-        x_vals = np.linspace(-x_extent, x_extent, self.config.x_points)
-        y_vals = np.linspace(-y_extent, y_extent, self.config.y_points)
-        grid_x, grid_y = np.meshgrid(x_vals, y_vals)
-
-        return grid_x, grid_y
-
-    def _spherical_grid(self) -> Tuple[np.ndarray, np.ndarray]:
+    def projection_grid(self) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Generate a (lon_grid, lat_grid) for backward projection.
+        Create the planar (X, Y) grid for forward projection.
         """
-        lon_vals = np.linspace(self.config.lon_min, self.config.lon_max, self.config.x_points)
-        lat_vals = np.linspace(self.config.lat_min, self.config.lat_max, self.config.y_points)
-        grid_lon, grid_lat = np.meshgrid(lon_vals, lat_vals)
+        logger.debug("Generating MyProjection forward grid.")
+        try:
+            # Example: use the field-of-view or bounding box from the config
+            # to define the extent of x, y
+            R = self.config.R
+            x_vals = np.linspace(-R, R, self.config.x_points)
+            y_vals = np.linspace(-R, R, self.config.y_points)
+            grid_x, grid_y = np.meshgrid(x_vals, y_vals)
+            return grid_x, grid_y
+        except Exception as e:
+            error_msg = f"Failed to generate forward grid: {e}"
+            logger.exception(error_msg)
+            raise GridGenerationError(error_msg)
 
-        return grid_lon, grid_lat
+    def spherical_grid(self) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Create the (lon, lat) grid for backward projection.
+        """
+        logger.debug("Generating MyProjection spherical grid.")
+        try:
+            lon_vals = np.linspace(self.config.lon_min, self.config.lon_max, self.config.x_points)
+            lat_vals = np.linspace(self.config.lat_min, self.config.lat_max, self.config.y_points)
+            grid_lon, grid_lat = np.meshgrid(lon_vals, lat_vals)
+            return grid_lon, grid_lat
+        except Exception as e:
+            error_msg = f"Failed to generate spherical grid: {e}"
+            logger.exception(error_msg)
+            raise GridGenerationError(error_msg)
+
 ```
-## 5. Create a Strategy Class (strategy.py)
+Key points for grid:
+	•	Extend BaseGridGeneration.
+	•	Implement projection_grid() and spherical_grid() to return np.ndarray meshes.
+	•	Use your config parameters (e.g., self.config.x_points, self.config.y_points, bounding box, etc.).
 
-This is where your forward (lat/lon → x/y) and inverse (x/y → lat/lon) formulas live. You will inherit from BaseProjectionStrategy and implement:
-	•	\_from_spherical_to_projection(...): The forward math
-	•	\_from_projection_to_spherical(...): The inverse math
+# 4. Implement the Projection Strategy (strategy.py)
+
+Your projection strategy does the actual math mapping from (\text{lat}, \text{lon}) to (x,y) and back again. It should:
+	•	Extend BaseProjectionStrategy.
+	•	Implement:
+	1.	from_spherical_to_projection(lat, lon) -> (x, y, mask)
+	2.	from_projection_to_spherical(x, y) -> (lat, lon)
+
+As with gnomonic/strategy.py:
+
 ```python
 # my_projection/strategy.py
-import numpy as np
-import logging
-from ..base.strategy import BaseProjectionStrategy
 
-logger = logging.getLogger('my_projection.strategy')
+import logging
+import numpy as np
+from typing import Tuple
+from ..base.strategy import BaseProjectionStrategy
+from ..exceptions import ProcessingError
+from .config import MyProjectionConfig
+
+logger = logging.getLogger("projection.my_projection.strategy")
 
 class MyProjectionStrategy(BaseProjectionStrategy):
-    def _from_spherical_to_projection(self, lat: np.ndarray, lon: np.ndarray):
+    """
+    Implements forward (lat/lon -> x/y) and inverse (x/y -> lat/lon)
+    transformations for MyProjection.
+    """
+
+    def __init__(self, config: MyProjectionConfig) -> None:
         """
-        Forward: (lat, lon) --> (x, y).
+        Initialize with validated config. 
+        """
+        logger.debug("Initializing MyProjectionStrategy.")
+        if not isinstance(config, MyProjectionConfig):
+            error_msg = f"config must be MyProjectionConfig, got {type(config)}"
+            logger.error(error_msg)
+            raise TypeError(error_msg)
+        self.config = config
+        logger.info("MyProjectionStrategy initialized successfully.")
+
+    def from_spherical_to_projection(
+        self, lat: np.ndarray, lon: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Forward: lat/lon (degrees) -> x/y (units).
         Return (x, y, mask).
-        - mask can help filter out invalid regions if cos_c <= 0, etc.
         """
-        # Convert degrees to radians
-        center_lat_rad = np.deg2rad(self.config.center_lat)
-        center_lon_rad = np.deg2rad(self.config.center_lon)
-        lat_rad = np.deg2rad(lat)
-        lon_rad = np.deg2rad(lon)
+        logger.debug("Starting forward MyProjection transformation.")
+        try:
+            # Convert degrees to radians if needed
+            lat_rad = np.radians(lat)
+            lon_rad = np.radians(lon)
 
-        # Insert your forward equations here.
-        # Example pseudo-code (this is NOT a real formula):
-        x = self.config.R * (lon_rad - center_lon_rad)
-        y = self.config.R * (lat_rad - center_lat_rad)
+            # Insert your projection’s forward math here:
+            # For example, x = R * ...
+            #              y = R * ...
+            x = self.config.R * (lon_rad - np.radians(self.config.lam0_deg))
+            y = self.config.R * (lat_rad - np.radians(self.config.phi0_deg))
 
-        # Create a boolean mask to indicate valid/invalid projection points
-        mask = np.ones_like(x, dtype=bool)
-        return x, y, mask
+            # mask can identify valid/invalid regions of your projection
+            mask = np.ones_like(x, dtype=bool)
+            return x, y, mask
+        except Exception as e:
+            error_msg = f"Forward MyProjection error: {e}"
+            logger.exception(error_msg)
+            raise ProcessingError(error_msg)
 
-    def _from_projection_to_spherical(self, x: np.ndarray, y: np.ndarray):
+    def from_projection_to_spherical(
+        self, x: np.ndarray, y: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Inverse: (x, y) --> (lat, lon).
+        Inverse: x/y -> lat/lon (degrees).
         """
-        center_lat_rad = np.deg2rad(self.config.center_lat)
-        center_lon_rad = np.deg2rad(self.config.center_lon)
+        logger.debug("Starting inverse MyProjection transformation.")
+        try:
+            lat_rad = (y / self.config.R) + np.radians(self.config.phi0_deg)
+            lon_rad = (x / self.config.R) + np.radians(self.config.lam0_deg)
 
-        lat_rad = (y / self.config.R) + center_lat_rad
-        lon_rad = (x / self.config.R) + center_lon_rad
-
-        lat = np.rad2deg(lat_rad)
-        lon = np.rad2deg(lon_rad)
-        return lat, lon
-
+            lat = np.degrees(lat_rad)
+            lon = np.degrees(lon_rad)
+            return lat, lon
+        except Exception as e:
+            error_msg = f"Inverse MyProjection error: {e}"
+            logger.exception(error_msg)
+            raise ProcessingError(error_msg)
 ```
-## 6. Create a Transformer Class (transform.py)
+Key points for strategy:
+	•	Make sure your forward method returns (x, y, mask); mask helps identify out-of-bounds or invalid points.
+	•	Properly handle degrees ↔ radians.
+	•	Raise ProcessingError (or relevant exceptions) if something goes wrong.
 
-The transformer handles how ((\text{lat}, \text{lon})) or ((x, y)) get mapped to pixel coordinates in an image. Typically:
-	•	spherical_to_image_coords(lat, lon, shape): Maps lat/lon to pixel ((map_x, map_y)) for the input equirectangular image dimensions.
-	•	projection_to_image_coords(x, y, shape): Maps your new projection’s ((x, y)) to pixel ((map_x, map_y)) if needed.
+# 5. Implement the Coordinate Transformer (transform.py)
 
+The transform class extends BaseCoordinateTransformer. It typically has two methods:
+	1.	spherical_to_image_coords(lat, lon, shape) -> (map_x, map_y): Convert lat/lon to pixel coordinates.
+	2.	projection_to_image_coords(x, y, config) -> (map_x, map_y): Convert projection-plane (x, y) to pixel coordinates.
+
+See gnomonic/transform.py for how Gnomonic uses fov_deg and the radius to derive pixel scaling. A simple example:
 ```python
 # my_projection/transform.py
-from ..base.transform import BaseCoordinateTransformer
-import numpy as np
-import logging
 
-logger = logging.getLogger('my_projection.transform')
+import logging
+import numpy as np
+from typing import Tuple, Any
+from ..base.transform import BaseCoordinateTransformer
+from ..exceptions import TransformationError, ConfigurationError
+
+logger = logging.getLogger("projection.my_projection.transform")
 
 class MyProjectionTransformer(BaseCoordinateTransformer):
-    def _spherical_to_image_coords(self, lat: np.ndarray, lon: np.ndarray, shape: tuple):
-        self._validate_inputs(lat, "lat")
-        self._validate_inputs(lon, "lon")
-        
-        H, W = shape[:2]  # image height, width
-        # Map lon from [lon_min, lon_max] to [0, W-1]
-        map_x = (lon - self.config.lon_min) / (self.config.lon_max - self.config.lon_min) * (W - 1)
-        # Map lat from [lat_max, lat_min] inversely down the image
-        map_y = (self.config.lat_max - lat) / (self.config.lat_max - self.config.lat_min) * (H - 1)
+    """
+    Convert lat/lon or x/y in MyProjection to final image pixel coords.
+    """
 
+    def __init__(self, config: Any):
+        super().__init__(config)
+        logger.debug("Initializing MyProjectionTransformer.")
+        # Validate needed attributes
+        required = ["lon_min", "lon_max", "lat_min", "lat_max", "x_points", "y_points"]
+        missing = [attr for attr in required if not hasattr(config, attr)]
+        if missing:
+            error_msg = f"Config missing attributes: {', '.join(missing)}"
+            logger.error(error_msg)
+            raise ConfigurationError(error_msg)
+        logger.info("MyProjectionTransformer initialized successfully.")
+
+    def spherical_to_image_coords(
+        self, lat: np.ndarray, lon: np.ndarray, shape: Tuple[int, int]
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Convert lat/lon (degrees) to image pixel indices.
+        shape is typically (height, width) of the input image.
+        """
+        logger.debug("Starting MyProjection spherical_to_image_coords.")
+        H, W = shape
+
+        # Basic example of linear scaling:
+        map_x = (lon - self.config.lon_min) / (self.config.lon_max - self.config.lon_min) * (W - 1)
+        map_y = (self.config.lat_max - lat) / (self.config.lat_max - self.config.lat_min) * (H - 1)
+        
         return map_x, map_y
 
-    def _projection_to_image_coords(self, x: np.ndarray, y: np.ndarray, shape: tuple):
-        self._validate_inputs(x, "x")
-        self._validate_inputs(y, "y")
+    def projection_to_image_coords(
+        self, x: np.ndarray, y: np.ndarray, config: Any
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Convert MyProjection x/y to image coords, e.g. scaling from ±some range into [0, width-1].
+        """
+        logger.debug("Starting MyProjection projection_to_image_coords.")
+        # Suppose we define the domain from -max_extent to +max_extent, etc.
+        max_extent = self.config.R  # or compute from fov_deg if relevant
+        min_extent = -max_extent
 
-        # For forward-projection images, you might map the (x, y) from [-extent, extent]
-        # to [0, width-1 / height-1].
-        # Example:
-        half_fov_rad = np.deg2rad(self.config.fov_deg / 2)
-        max_val = np.tan(half_fov_rad) * self.config.R
-        min_val = -max_val
-
-        W, H = self.config.x_points, self.config.y_points
-        # Normalize x
-        map_x = (x - min_val) / (max_val - min_val) * (W - 1)
-        # Normalize y (top->bottom)
-        map_y = (max_val - y) / (max_val - min_val) * (H - 1)
+        map_x = ((x - min_extent) / (max_extent - min_extent)) * (self.config.x_points - 1)
+        map_y = ((max_extent - y) / (max_extent - min_extent)) * (self.config.y_points - 1)
 
         return map_x, map_y
 ```
-(You can adapt these formulas based on how you want to interpret the grids in your new projection. The main idea is that each dimension in your projection gets normalized to pixel indices.)
+Key points for transform:
+	•	Subclass BaseCoordinateTransformer.
+	•	Validate config attributes in __init__.
+	•	Provide meaningful scaling from your (x, y) or (\text{lat}, \text{lon}) domain into pixel image coordinates.
 
-7. Register Your Projection (default_projections.py or Similar)
-	1.	Import your newly created classes into default_projections.py (or wherever you handle the “official” registry addition).
-	2.	Call ProjectionRegistry.register("my_projection", {...}) with the required components.
-
-Example:
-```python
-# default_projections.py
-
+# # default_projections.py (or wherever you prefer)
 from .registry import ProjectionRegistry
 
-# Import from your new folder
+# Import your classes
 from .my_projection.config import MyProjectionConfig
 from .my_projection.grid import MyProjectionGridGeneration
 from .my_projection.strategy import MyProjectionStrategy
 from .my_projection.transform import MyProjectionTransformer
-from .common.interpolation import BaseInterpolation  # Or a custom interpolation
+
+# Possibly your custom interpolation class, or just use BaseInterpolation
+from .base.interpolation import BaseInterpolation
 
 def register_default_projections():
-    # existing gnomonic, mercator, etc.
-    
+    ...
     # Register your new projection
     ProjectionRegistry.register("my_projection", {
         "config": MyProjectionConfig,
         "grid_generation": MyProjectionGridGeneration,
         "projection_strategy": MyProjectionStrategy,
-        "interpolation": BaseInterpolation,   # or your own if you created a custom class
-        "transformer": MyProjectionTransformer
+        "interpolation": BaseInterpolation,           # or your own
+        "transformer": MyProjectionTransformer,       # or your own
     })
-```
-## 8. Using Your New Projection
+    ...
 
-After registration, you can retrieve an instance of your projection in two ways:
-	1.	Get the BaseProjectionConfig only:
+# 7. Verify Your Implementation
+	1.	Check config: Instantiate MyProjectionConfig(...) with various parameters. Confirm validation works.
+	2.	Check grid: Instantiate MyProjectionGridGeneration(config).projection_grid() and spherical_grid()—check shapes and expected numeric ranges.
+	3.	Check strategy: Confirm your math in from_spherical_to_projection() and from_projection_to_spherical() with known test points.
+	4.	Check transform: Ensure spherical_to_image_coords() and projection_to_image_coords() produce the pixel coordinates you expect.
+	5.	Perform a test projection:
 
 ```python
-from gnomonic.projection.registry import ProjectionRegistry
-my_config = ProjectionRegistry.get_projection("my_projection", return_processor=False, R=6371.0, center_lat=45.0, ...)
+processor = ProjectionRegistry.get_projection("my_projection", return_processor=True, R=8000.0)
+forward_img = processor.forward(input_img)
+back_img = processor.backward(forward_img)
 ```
-Then manually create a ProjectionProcessor(my_config).
+Summary of the Required Steps
+	1.	Create my_projection/config.py:
+	•	A Pydantic model MyProjectionConfigModel.
+	•	A wrapper class MyProjectionConfig.
+	2.	Create my_projection/grid.py:
+	•	Extend BaseGridGeneration.
+	•	Implement projection_grid() (forward grid) and spherical_grid() (backward grid).
+	3.	Create my_projection/strategy.py:
+	•	Extend BaseProjectionStrategy.
+	•	Implement the forward (from_spherical_to_projection) and inverse (from_projection_to_spherical) projection logic.
+	4.	Create my_projection/transform.py:
+	•	Extend BaseCoordinateTransformer.
+	•	Implement methods to convert lat/lon → image coords and x/y → image coords.
+	5.	Register your projection via ProjectionRegistry.register(...).
+	6.	Use your new projection by retrieving a processor or config from the registry.
 
-	2.	Get a fully equipped ProjectionProcessor in one call:
-```python
-processor = ProjectionRegistry.get_projection(
-    "my_projection", return_processor=True,
-    R=6371.0, center_lat=45.0, center_lon=0.0, ...
-)
-# Then use forward/backward
-output_img = processor.forward(input_equirectangular_img)
-back_to_eqrect = processor.backward(output_img)
-```
-
-## 9. Summary of the Pipeline
-	1.	Forward Projection
-	•	processor.forward(...) triggers:
-	•	grid_generation.projection_grid(): your _projection_grid()
-	•	projection_strategy.from_projection_to_spherical(x_grid, y_grid): your inverse math
-	•	transformer.spherical_to_image_coords(lat, lon): to get pixel coords in original equirectangular
-	•	interpolation.interpolate(...): actually remaps the pixels
-	2.	Backward Projection
-	•	processor.backward(...) triggers:
-	•	grid_generation.spherical_grid(): your _spherical_grid()
-	•	projection_strategy.from_spherical_to_projection(lat_grid, lon_grid): your forward math
-	•	transformer.projection_to_image_coords(x, y): to get pixel coords in the new projection image
-	•	interpolation.interpolate(...): remaps pixels from the rectilinear image back to equirect.
-
-By following these instructions, you’ll have a fully integrated projection that the framework can use just like the existing gnomonic or mercator projections.
-
-# Test
-
-Write a test function such as
-```python
-import numpy as np
-import cv2
-from projection.registry import ProjectionRegistry
-import matplotlib.pyplot as plt
-
-def test_gnomonic_projection(image_path: str, output_dir: str):
-    """
-    Test the Gnomonic projection system by performing forward and backward projections.
-
-    Args:
-        image_path (str): Path to the input equirectangular image.
-        output_dir (str): Directory to save the output images.
-    """
-    # Step 1: Load the equirectangular image
-    equirect_img = cv2.imread(image_path)
-    if equirect_img is None:
-        raise RuntimeError(f"Failed to load the image at {image_path}.")
-    H, W, _ = equirect_img.shape
-
-    # Convert the image from BGR to RGB
-    equirect_img = cv2.cvtColor(equirect_img, cv2.COLOR_BGR2RGB)
-
-    # Step 2: Retrieve and instantiate a Gnomonic projection processor
-    processor = ProjectionRegistry.get_projection(
-        "gnomonic",
-        return_processor=True,
-        phi1_deg=0,
-        lam0_deg=90,
-        lat_points=H,
-        lon_points=W,
-        x_points=W // 4,
-        y_points=H // 2,
-        fov_deg=90
-    )
-
-    # Step 3: Perform forward projection to rectilinear
-    rectilinear_img = processor.forward(equirect_img)
-    rectilinear_path = f"{output_dir}/gnomonic_rectilinear.png"
-    cv2.imwrite(rectilinear_path, cv2.cvtColor(rectilinear_img, cv2.COLOR_RGB2BGR))
-    print(f"Gnomonic Rectilinear image saved to {rectilinear_path}")
-
-    # Step 4: Perform backward projection to equirectangular
-    equirectangular_img = processor.backward(
-        rectilinear_img,
-        return_mask=True,
-    )
-    equirectangular_path = f"{output_dir}/gnomonic_equirectangular.png"
-    cv2.imwrite(equirectangular_path, cv2.cvtColor(equirectangular_img, cv2.COLOR_RGB2BGR))
-    print(f"Gnomonic Equirectangular image saved to {equirectangular_path}")
-
-    # Step 5: Mask pixels outside the projection area
-    mask = np.mean(equirectangular_img, axis=-1) > 0
-
-    # Step 6: Compute the Mean Absolute Error (MAE)
-    mae_img = np.abs(equirect_img * mask[:, :, None] - equirectangular_img)
-    mae = np.mean(mae_img[mask])
-    print(f"Gnomonic Projection Mean Absolute Error: {mae}")
-
-    # Step 7: Visualize the results
-    plt.figure(figsize=(15, 5))
-
-    plt.subplot(1, 2, 1)
-    plt.title("Gnomonic Rectilinear Image")
-    plt.imshow(rectilinear_img)
-
-    plt.subplot(1, 2, 2)
-    plt.title("Gnomonic Equirectangular Image")
-    plt.imshow(equirectangular_img)
-
-    plt.show()
-
-test_gnomonic_projection(image_path="data/image1.png", output_dir="results")
-```
+By following these guidelines (mirroring the structure of the Gnomonic implementation), you will have a fully functional, registerable projection integrated into your package. Good luck implementing your new projection type!
