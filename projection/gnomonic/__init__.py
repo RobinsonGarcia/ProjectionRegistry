@@ -130,6 +130,7 @@ import logging
 from .config import GnomonicConfig
 from .strategy import GnomonicProjectionStrategy
 from .grid import GnomonicGridGeneration
+from .transform import GnomonicTransformer
 from ..logging_config import setup_logging
 #from ..base.processor import BaseProjectionProcessor
 # Initialize logger for this module
@@ -155,4 +156,5 @@ __all__ = [
     "GnomonicConfig",
     "GnomonicProjectionStrategy",
     "GnomonicGridGeneration",
+    "GnomonicTransformer"
 ]
