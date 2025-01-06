@@ -1,4 +1,32 @@
-### /Users/robinsongarcia/projects/gnomonic/projection/base/__init__.py ###
+### /Users/robinsongarcia/projects/gnomonic/projection//__init__.py ###
+### /Users/robinsongarcia/projects/gnomonic/projection/__init__.py ###
+
+"""
+Gnomonic Projection Package
+
+This package provides functionalities for gnomonic projections,
+including registry management and default projection registration.
+"""
+
+from .registry import ProjectionRegistry
+from .default_projections import register_default_projections
+from .logging_config import setup_logging
+
+# Set up logging
+logger = setup_logging()
+logger.info("Initializing Gnomonic Projection Package")
+
+# Automatically register default projections
+try:
+    register_default_projections()
+    logger.info("Default projections registered successfully.")
+except Exception as e:
+    logger.exception("Failed to register default projections.")
+    raise RuntimeError("Failed to register default projections.") from e
+
+__all__ = ["ProjectionRegistry"]
+
+### /Users/robinsongarcia/projects/gnomonic/projection//base/__init__.py ###
 ### /Users/robinsongarcia/projects/gnomonic/projection/base/__init__.py ###
 
 """
@@ -12,7 +40,7 @@ from .config import BaseProjectionConfig
 from .strategy import BaseProjectionStrategy
 from .grid import BaseGridGeneration
 from .interpolation import BaseInterpolation
-from .transform import CoordinateTransformer
+from .transform import BaseCoordinateTransformer
 from ..exceptions import (
     ProjectionError,
     ConfigurationError,
@@ -28,7 +56,7 @@ __all__ = [
     "BaseProjectionStrategy",
     "BaseGridGeneration",
     "BaseInterpolation",
-    "CoordinateTransformer",
+    "BaseCoordinateTransformer",
     "ProjectionError",
     "ConfigurationError",
     "RegistrationError",
@@ -38,7 +66,7 @@ __all__ = [
     "InterpolationError",
 ]
 
-### /Users/robinsongarcia/projects/gnomonic/projection/base/config.py ###
+### /Users/robinsongarcia/projects/gnomonic/projection//base/config.py ###
 from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field, validator
 from ..base.interpolation import BaseInterpolation
@@ -181,7 +209,7 @@ class BaseProjectionConfig:
         """
         return f"BaseProjectionConfig(params={self.params.dict()}, extra_params={self.extra_params})"
 
-### /Users/robinsongarcia/projects/gnomonic/projection/base/grid.py ###
+### /Users/robinsongarcia/projects/gnomonic/projection//base/grid.py ###
 ### /Users/robinsongarcia/projects/gnomonic/projection/base/grid.py ###
 
 from typing import Any, Tuple
@@ -196,51 +224,16 @@ class BaseGridGeneration:
     """
     Base class for grid generation in projections.
     """
-    def create_grid(self, direction: str) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Create a grid based on the specified direction.
-
-        Args:
-            direction (str): Direction of grid creation ('forward' or 'backward').
-
-        Returns:
-            Tuple[np.ndarray, np.ndarray]: Generated grid arrays.
-
-        Raises:
-            GridGenerationError: If the direction is invalid or method is not overridden.
-        """
-        logger.debug(f"Creating grid with direction '{direction}'.")
-        if direction not in ('forward', 'backward'):
-            error_msg = "Direction must be 'forward' or 'backward'."
-            logger.error(error_msg)
-            raise GridGenerationError(error_msg)
-        logger.debug(f"Direction '{direction}' is valid.")
-        try:
-            # Attempt to call the overridden method in subclasses
-            return self._create_grid(direction)
-        except NotImplementedError as e:
-            error_msg = "Subclasses must implement create_grid."
-            logger.error(error_msg)
-            raise GridGenerationError(error_msg) from e
-        except Exception as e:
-            error_msg = f"An unexpected error occurred while creating grid: {e}"
-            logger.exception(error_msg)
-            raise GridGenerationError(error_msg) from e
-
-    def _create_grid(self, direction: str) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Internal method to be overridden by subclasses for grid creation.
-
-        Args:
-            direction (str): Direction of grid creation.
-
-        Raises:
-            NotImplementedError: If not overridden by subclasses.
-        """
-        logger.debug("BaseGridGeneration._create_grid called - should be overridden.")
+    def __init__(self, config):
+        self.config = config
+        
+    @classmethod
+    def projection_grid(self) -> Tuple[np.ndarray, np.ndarray]:
+       
+    
         raise NotImplementedError("Subclasses must implement _create_grid.")
 
-### /Users/robinsongarcia/projects/gnomonic/projection/base/interpolation.py ###
+### /Users/robinsongarcia/projects/gnomonic/projection//base/interpolation.py ###
 ### /Users/robinsongarcia/projects/gnomonic/projection/base/interpolation.py ###
 
 from typing import Any, Optional
@@ -344,7 +337,28 @@ class BaseInterpolation:
         logger.info("Image interpolation completed successfully.")
         return result
 
-### /Users/robinsongarcia/projects/gnomonic/projection/base/strategy.py ###
+### /Users/robinsongarcia/projects/gnomonic/projection//base/registry.py ###
+from typing import Any, Dict, Optional, Type, Union
+import logging
+
+logger = logging.getLogger('gnomonic_projection.registry')
+
+class RegistryBase(type):
+    REGISTRY = {}
+
+    def __new__(cls, name, bases, attrs):
+        new_cls = type.__new__(cls, name, bases, attrs)
+        cls.REGISTRY[new_cls.__name__] = new_cls
+        return new_cls
+
+    @classmethod
+    def get_registry(cls):
+        return dict(cls.REGISTRY)
+
+class BaseRegisteredClass(metaclass=RegistryBase):
+    pass
+
+### /Users/robinsongarcia/projects/gnomonic/projection//base/strategy.py ###
 ### /Users/robinsongarcia/projects/gnomonic/projection/base/strategy.py ###
 
 from typing import Any, Tuple
@@ -359,7 +373,8 @@ class BaseProjectionStrategy:
     """
     Base class for projection strategies.
     """
-    def forward(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    @classmethod
+    def from_spherical_to_projection(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         Perform forward projection from grid coordinates to latitude and longitude.
 
@@ -381,7 +396,8 @@ class BaseProjectionStrategy:
         logger.debug("Forward projection inputs are valid.")
         raise NotImplementedError("Subclasses must implement forward.")
 
-    def backward(self, lat: np.ndarray, lon: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    @classmethod
+    def from_projection_to_spherical(self, lat: np.ndarray, lon: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Perform backward projection from latitude and longitude to grid coordinates.
 
@@ -403,7 +419,7 @@ class BaseProjectionStrategy:
         logger.debug("Backward projection inputs are valid.")
         raise NotImplementedError("Subclasses must implement backward.")
 
-### /Users/robinsongarcia/projects/gnomonic/projection/base/transform.py ###
+### /Users/robinsongarcia/projects/gnomonic/projection//base/transform.py ###
 from typing import Any, Tuple
 import numpy as np
 import logging
@@ -412,75 +428,978 @@ from ..exceptions import TransformationError, ConfigurationError
 # Initialize logger for this module
 logger = logging.getLogger('gnomonic_projection.base.transform')
 
-class CoordinateTransformer:
+class BaseCoordinateTransformer:
     """
     Utility class for transforming coordinates between different systems.
     """
 
-    @staticmethod
-    def latlon_to_image_coords(
+    def __init__(self, config) -> None:
+        self.config = config
+
+    @classmethod
+    def spherical_to_image_coords(
         lat: np.ndarray, 
         lon: np.ndarray, 
         config: Any, 
         shape: Tuple[int, int, ...]
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Convert latitude and longitude to image coordinates.
-
-        Args:
-            lat (np.ndarray): Latitude values.
-            lon (np.ndarray): Longitude values.
-            config (Any): Configuration object containing grid parameters.
-            shape (Tuple[int, int, ...]): Shape of the target image (height, width, ...).
-
-        Returns:
-            Tuple[np.ndarray, np.ndarray]: X and Y coordinates in image space.
-
-        Raises:
-            TransformationError: If input arrays are invalid or computation fails.
-            ConfigurationError: If config lacks required attributes.
-        """
-        logger.debug("Transforming latitude and longitude to image coordinates.")
-        if not isinstance(lat, np.ndarray) or not isinstance(lon, np.ndarray):
-            error_msg = "lat and lon must be NumPy ndarrays."
-            logger.error(error_msg)
-            raise TransformationError(error_msg)
-        if not hasattr(config, "lon_min") or not hasattr(config, "lon_max") \
-           or not hasattr(config, "lat_min") or not hasattr(config, "lat_max"):
-            error_msg = "config must have 'lon_min', 'lon_max', 'lat_min', and 'lat_max' attributes."
-            logger.error(error_msg)
-            raise ConfigurationError(error_msg)
-
-        if len(shape) < 2:
-            error_msg = "Image shape must have at least two dimensions (height, width)."
-            logger.error(error_msg)
-            raise TransformationError(error_msg)
-
-        H, W = shape[:2]
-        try:
-            map_x = (lon - config.lon_min) / (config.lon_max - config.lon_min) * (W - 1)
-            map_y = (config.lat_max - lat) / (config.lat_max - config.lat_min) * (H - 1)
-            logger.debug("Computed image coordinates successfully.")
-        except Exception as e:
-            error_msg = f"Failed to compute image coordinates: {e}"
-            logger.exception(error_msg)
-            raise TransformationError(error_msg) from e
-
-        return map_x, map_y
+        raise NotImplementedError("Subclasses must implement forward.")
 
     @staticmethod
-    def xy_to_image_coords(
+    def projection_to_image_coords(
         x: np.ndarray, 
         y: np.ndarray, 
         config: Any
     ) -> Tuple[np.ndarray, np.ndarray]:
+        raise NotImplementedError("Subclasses must implement forward.")
+
+### /Users/robinsongarcia/projects/gnomonic/projection//default_projections.py ###
+from .registry import ProjectionRegistry
+
+from .gnomonic.config import GnomonicConfig
+from .gnomonic.grid import GnomonicGridGeneration
+from .gnomonic.strategy import GnomonicProjectionStrategy
+from .gnomonic.transform import GnomonicTransformer  # Updated to per-projection transformer
+
+from .mercator.config import MercatorConfig
+from .mercator.grid import MercatorGridGeneration
+from .mercator.strategy import MercatorProjectionStrategy
+from .mercator.transform import MercatorTransformer  # Updated to per-projection transformer
+
+# Import the oblique mercator components
+from .oblique_mercator.config import ObliqueMercatorConfig
+from .oblique_mercator.grid import ObliqueMercatorGridGeneration
+from .oblique_mercator.strategy import ObliqueMercatorProjectionStrategy
+from .oblique_mercator.transform import ObliqueMercatorTransformer
+
+from .base.interpolation import BaseInterpolation
+from .exceptions import RegistrationError
+import logging
+
+# Initialize logger for this module
+logger = logging.getLogger('gnomonic_projection.default_projections')
+
+
+def register_default_projections():
+    """
+    Register default projections with their components.
+    """
+    logger.debug("Registering default projections.")
+    try:
+        # Register Gnomonic projection
+        ProjectionRegistry.register("gnomonic", {
+            "config": GnomonicConfig,
+            "grid_generation": GnomonicGridGeneration,
+            "projection_strategy": GnomonicProjectionStrategy,
+            "interpolation": BaseInterpolation,
+            "transformer": GnomonicTransformer,  # Updated to GnomonicTransformer
+        })
+        logger.info("Default projection 'gnomonic' registered successfully.")
+
+        # Register Mercator projection
+        ProjectionRegistry.register("mercator", {
+            "config": MercatorConfig,
+            "grid_generation": MercatorGridGeneration,
+            "projection_strategy": MercatorProjectionStrategy,
+            "interpolation": BaseInterpolation,
+            "transformer": MercatorTransformer,  # Updated to MercatorTransformer
+        })
+
+        # Register Oblique Mercator
+        ProjectionRegistry.register("oblique_mercator", {
+            "config": ObliqueMercatorConfig,
+            "grid_generation": ObliqueMercatorGridGeneration,
+            "projection_strategy": ObliqueMercatorProjectionStrategy,
+            "interpolation": BaseInterpolation,  # or your own custom interpolation
+            "transformer": ObliqueMercatorTransformer
+        })
+        logger.info("Default projection 'mercator' registered successfully.")
+
+    except RegistrationError as e:
+        logger.exception("Failed to register default projections.")
+        raise RegistrationError(f"Failed to register default projections: {e}") from e
+    except Exception as e:
+        logger.exception("An unexpected error occurred while registering default projections.")
+        raise RegistrationError(f"An unexpected error occurred: {e}") from e
+
+    logger.debug("All default projections registered.")
+
+### /Users/robinsongarcia/projects/gnomonic/projection//exceptions.py ###
+### /Users/robinsongarcia/projects/gnomonic/projection/exceptions.py ###
+
+"""
+Custom exception classes for the Gnomonic Projection module.
+"""
+
+class ProjectionError(Exception):
+    """Base exception for projection-related errors."""
+    pass
+
+class ConfigurationError(ProjectionError):
+    """Exception raised for configuration-related issues."""
+    pass
+
+class RegistrationError(ProjectionError):
+    """Exception raised during projection registration."""
+    pass
+
+class ProcessingError(ProjectionError):
+    """Exception raised during projection processing."""
+    pass
+
+class GridGenerationError(ProjectionError):
+    """Exception raised during grid generation."""
+    pass
+
+class TransformationError(ProjectionError):
+    """Exception raised during coordinate transformations."""
+    pass
+
+class InterpolationError(ProjectionError):
+    """Exception raised during image interpolation."""
+    pass
+
+### /Users/robinsongarcia/projects/gnomonic/projection//gnomonic/__init__.py ###
+"""
+Gnomonic Projection Module
+
+This module provides specific implementations for Gnomonic projections,
+including configuration, projection strategies, and grid generation.
+
+## Mathematical Foundation
+
+The Gnomonic projection transforms points on the surface of a sphere (e.g., Earth)
+onto a plane using a projection point located at the center of the sphere.
+This projection is based on the principles of spherical trigonometry and can be
+derived using the following key equations:
+
+1. **Projection Equations:**
+   
+   For an oblique Gnomonic projection centered at latitude \(\phi_0\) and longitude \(\lambda_0\),
+   the mapping from geographic coordinates \((\phi, \lambda)\) to planar coordinates \((x, y)\)
+   is given by:
+
+   $$
+   x = \frac{a \,\sin \psi \,\cos \phi \,\sin(\lambda - \lambda_0)}{\sin \phi_0 \,\sin \phi + \cos \phi_0 \,\cos \phi \,\cos(\lambda - \lambda_0)}
+   $$
+
+   $$
+   y = \frac{a \,\sin \psi \bigl[\cos \phi_0 \,\sin \phi - \sin \phi_0 \,\cos \phi \,\cos(\lambda - \lambda_0)\bigr]}{\sin \phi_0 \,\sin \phi + \cos \phi_0 \,\cos \phi \,\cos(\lambda - \lambda_0)}
+   $$
+
+   Where:
+   - \(a\) is the radius of the Earth.
+   - \(\psi\) is the auxiliary angle defined by the relationship:
+
+     $$
+     \cos \psi = \sin \phi_0 \,\sin \phi + \cos \phi_0 \,\cos \phi \,\cos(\lambda - \lambda_0)
+     $$
+
+2. **Special Cases:**
+   
+   - **Polar Gnomonic Projection (\(\phi_0 = 90^\circ\)):**
+
+     $$
+     x = -\,aS \,\cot \phi \,\sin(\lambda - \lambda_0)
+     $$
+
+     $$
+     y = aS \,\cot \phi \,\cos(\lambda - \lambda_0)
+     $$
+
+     In this case, all meridians appear as straight lines radiating from the center,
+     and parallels as concentric circles.
+
+The Gnomonic projection is particularly useful for mapping great circles as straight lines,
+which is advantageous in navigation and aeronautics.
+
+## Projection Processes
+
+1. **Forward Projection:**
+   
+   The forward projection maps points from an equirectangular (input) image to the Gnomonic projection plane.
+   This process involves:
+   
+   - **Grid Generation:** Creating a meshgrid on the Gnomonic projection plane based on the field of view (`fov_deg`) and the Earth's radius (`R`).
+   - **Coordinate Transformation:** Converting geographic coordinates (latitude and longitude) from the input image to planar coordinates (`x`, `y`) on the projection plane using the projection equations.
+   - **Image Mapping:** Interpolating the input image based on the transformed coordinates to generate the projected Gnomonic image.
+
+2. **Backward Projection:**
+   
+   The backward projection maps points from the Gnomonic projection plane back to an equirectangular (output) image.
+   This reverse process involves:
+   
+   - **Grid Generation:** Creating a meshgrid covering the full range of longitude and latitude defined by `lon_min`, `lon_max`, `lat_min`, and `lat_max`.
+   - **Coordinate Transformation:** Converting planar coordinates (`x`, `y`) from the projection plane back to geographic coordinates (latitude and longitude) using the inverse of the projection equations.
+   - **Image Mapping:** Interpolating the Gnomonic image based on the transformed coordinates to reconstruct the equirectangular output image.
+
+These processes ensure accurate mapping between different projection systems, maintaining the integrity of geospatial data during transformations.
+
+## Usage
+
+To perform Gnomonic projections, utilize the provided classes:
+
+- **GnomonicConfig:** Manage and validate projection configurations.
+- **GnomonicGridGeneration:** Generate forward and backward grids for projection.
+- **GnomonicProjectionStrategy:** Execute forward and backward projection transformations.
+
+### Example:
+
+```python
+from gnomonic.projection.gnomonic import GnomonicConfig, GnomonicProjectionStrategy, GnomonicGridGeneration
+from gnomonic.projection.processor import ProjectionProcessor
+import cv2
+
+# Initialize configuration
+config = GnomonicConfig(
+    R=6371.0,          # Earth's radius in kilometers
+    phi1_deg=45.0,     # Projection center latitude
+    lam0_deg=0.0,      # Projection center longitude
+    fov_deg=90.0,      # Field of view
+    x_points=1024,     # Grid resolution x
+    y_points=1024,     # Grid resolution y
+    lon_min=-180.0,
+    lon_max=180.0,
+    lat_min=-90.0,
+    lat_max=90.0
+)
+
+# Initialize grid generation and projection strategy
+grid_gen = GnomonicGridGeneration(config)
+strategy = GnomonicProjectionStrategy(config)
+
+# Initialize processor
+processor = ProjectionProcessor(config, grid_gen, strategy)
+
+# Load an equirectangular image
+equirect_img = cv2.imread('equirectangular_map.jpg')
+
+# Perform forward projection
+gnomonic_img = processor.forward(equirect_img)
+
+# Save the projected image
+cv2.imwrite('gnomonic_projected_map.jpg', gnomonic_img)
+
+# Perform backward projection
+back_projected_img = processor.backward(gnomonic_img)
+
+# Save the back-projected image
+cv2.imwrite('back_projected_map.jpg', back_projected_img)
+"""
+
+import logging
+
+from .config import GnomonicConfig
+from .strategy import GnomonicProjectionStrategy
+from .grid import GnomonicGridGeneration
+from .transform import GnomonicTransformer
+from ..logging_config import setup_logging
+#from ..base.processor import BaseProjectionProcessor
+# Initialize logger for this module
+logger = logging.getLogger('gnomonic_projection.gnomonic')
+
+def initialize_gnomonic_module():
+    """
+    Initialize the Gnomonic Projection module.
+
+    This initialization sets up any module-specific configurations or prerequisites.
+    Currently, it primarily logs the initialization status.
+    """
+    logger.debug("Initializing Gnomonic Projection Module.")
+    # Any module-specific initialization can be done here
+    logger.info("Gnomonic Projection Module initialized successfully.")
+
+# Call the initialization function upon import
+initialize_gnomonic_module()
+
+
+
+__all__ = [
+    "GnomonicConfig",
+    "GnomonicProjectionStrategy",
+    "GnomonicGridGeneration",
+    "GnomonicTransformer"
+]
+
+### /Users/robinsongarcia/projects/gnomonic/projection//gnomonic/config.py ###
+
+from typing import Any, Optional
+from pydantic import BaseModel, Field, validator
+import cv2
+import logging
+from ..exceptions import ConfigurationError
+
+# Initialize logger for this module
+logger = logging.getLogger('gnomonic_projection.gnomonic.config')
+
+class GnomonicConfigModel(BaseModel):
+    R: float = Field(1.0, description="Radius of the sphere (e.g., Earth) in consistent units.")
+    phi1_deg: float = Field(0.0, description="Latitude of the projection center in degrees.")
+    lam0_deg: float = Field(0.0, description="Longitude of the projection center in degrees.")
+    fov_deg: float = Field(90.0, description="Field of view in degrees.")
+    x_points: int = Field(512, description="Number of grid points in the x-direction.")
+    y_points: int = Field(512, description="Number of grid points in the y-direction.")
+    lon_points: int = Field(1024, description="Number of longitude points for inverse grid mapping.")
+    lat_points: int = Field(512, description="Number of latitude points for inverse grid mapping.")
+    lon_min: float = Field(-180.0, description="Minimum longitude in the grid (degrees).")
+    lon_max: float = Field(180.0, description="Maximum longitude in the grid (degrees).")
+    lat_min: float = Field(-90.0, description="Minimum latitude in the grid (degrees).")
+    lat_max: float = Field(90.0, description="Maximum latitude in the grid (degrees).")
+    interpolation: Optional[int] = Field(default=cv2.INTER_LINEAR, description="Interpolation method for OpenCV remap.")
+    borderMode: Optional[int] = Field(default=cv2.BORDER_CONSTANT, description="Border mode for OpenCV remap.")
+    borderValue: Optional[Any] = Field(default=0, description="Border value for OpenCV remap.")
+
+    @validator('fov_deg')
+    def validate_fov(cls, v):
         """
-        Convert X and Y grid coordinates to image coordinates.
+        Validate that the field of view is between 0 and 180 degrees.
+        """
+        if not (0 < v < 180):
+            raise ValueError("Field of view (fov_deg) must be between 0 and 180 degrees.")
+        return v
+
+    class Config:
+        arbitrary_types_allowed = True
+
+class GnomonicConfig:
+    """
+    Configuration class for Gnomonic projections using Pydantic for validation.
+
+    This class encapsulates all necessary parameters required to perform both forward (equirectangular to Gnomonic)
+    and inverse (Gnomonic to equirectangular) projections. It ensures that configurations are validated
+    and managed efficiently.
+
+    ## Key Parameters:
+
+    - **R:** Radius of the sphere (e.g., Earth) in consistent units.
+    - **phi1_deg:** Latitude of the projection center in degrees.
+    - **lam0_deg:** Longitude of the projection center in degrees.
+    - **fov_deg:** Field of view in degrees.
+    - **x_points & y_points:** Grid resolution for the Gnomonic projection plane.
+    - **lon_points & lat_points:** Resolution for inverse grid mapping to the equirectangular projection.
+    - **lon_min, lon_max, lat_min, lat_max:** Geographic bounds of the equirectangular grid.
+    - **interpolation, borderMode, borderValue:** Parameters for image interpolation.
+
+    ## Mathematical Context:
+
+    The configuration parameters directly influence the projection equations derived from spherical trigonometry.
+    For instance, the field of view (`fov_deg`) determines the extent of the Gnomonic projection on the plane,
+    while the center coordinates (`phi1_deg`, `lam0_deg`) establish the orientation of the projection.
+    """
+
+    def __init__(self, **kwargs: Any) -> None:
+        """
+        Initialize the GnomonicConfig with provided parameters.
 
         Args:
-            x (np.ndarray): X coordinates in grid space.
-            y (np.ndarray): Y coordinates in grid space.
-            config (Any): Configuration object containing grid parameters.
+            **kwargs (Any): Configuration parameters as keyword arguments.
+
+        Raises:
+            ConfigurationError: If initialization fails due to invalid parameters.
+        """
+        logger.debug("Initializing GnomonicConfig with parameters: %s", kwargs)
+        try:
+            self.config = GnomonicConfigModel(**kwargs)
+            logger.info("GnomonicConfig initialized successfully.")
+        except Exception as e:
+            error_msg = f"Failed to initialize GnomonicConfig: {e}"
+            logger.exception(error_msg)
+            raise ConfigurationError(error_msg) from e
+
+    def update(self, **kwargs: Any) -> None:
+        """
+        Update configuration parameters dynamically.
+
+        Args:
+            **kwargs (Any): Parameters to update in the configuration.
+
+        Raises:
+            ConfigurationError: If updating fails due to invalid parameters.
+        """
+        logger.debug(f"Updating GnomonicConfig with parameters: {kwargs}")
+        try:
+            updated_config = self.config.copy(update=kwargs)
+            self.config = updated_config
+            logger.info("GnomonicConfig updated successfully.")
+        except Exception as e:
+            error_msg = f"Failed to update GnomonicConfig: {e}"
+            logger.exception(error_msg)
+            raise ConfigurationError(error_msg) from e
+
+    def __getattr__(self, item: str) -> Any:
+        """
+        Access configuration parameters as attributes.
+
+        Args:
+            item (str): Parameter name.
+
+        Returns:
+            Any: The value of the parameter if it exists.
+
+        Raises:
+            AttributeError: If the parameter does not exist.
+        """
+        logger.debug(f"Accessing GnomonicConfig attribute '{item}'.")
+        try:
+            return getattr(self.config, item)
+        except AttributeError:
+            error_msg = f"'GnomonicConfig' object has no attribute '{item}'"
+            logger.error(error_msg)
+            raise AttributeError(error_msg) from None
+
+    def __repr__(self) -> str:
+        """
+        String representation of the configuration.
+
+        Returns:
+            str: Human-readable string of configuration parameters.
+        """
+        return f"GnomonicConfig({self.config.dict()})"
+
+### /Users/robinsongarcia/projects/gnomonic/projection//gnomonic/grid.py ###
+from typing import Any, Tuple
+from ..base.grid import BaseGridGeneration
+from .config import GnomonicConfig
+from ..exceptions import GridGenerationError
+import numpy as np
+import logging
+
+logger = logging.getLogger('gnomonic_projection.gnomonic.grid')
+
+class GnomonicGridGeneration(BaseGridGeneration):
+    
+    def projection_grid(self):
+        half_fov_rad = np.deg2rad(self.config.fov_deg / 2)
+        x_max = np.tan(half_fov_rad) * self.config.R
+        y_max = np.tan(half_fov_rad) * self.config.R
+        x_vals = np.linspace(-x_max, x_max, self.config.x_points)
+        y_vals = np.linspace(-y_max, y_max, self.config.y_points)
+        grid_x, grid_y = np.meshgrid(x_vals, y_vals)
+        return grid_x, grid_y       
+    
+    def spherical_grid(self):
+        # Generate linearly spaced points for longitude and latitude spanning the full geographic range
+        lon_vals = np.linspace(self.config.lon_min, self.config.lon_max, self.config.lon_points)
+        lat_vals = np.linspace(self.config.lat_min, self.config.lat_max, self.config.lat_points)
+        grid_lon, grid_lat = np.meshgrid(lon_vals, lat_vals)
+        return grid_lon, grid_lat        
+    
+
+### /Users/robinsongarcia/projects/gnomonic/projection//gnomonic/strategy.py ###
+from typing import Any, Tuple
+from ..base.strategy import BaseProjectionStrategy
+from .config import GnomonicConfig
+from ..exceptions import ProcessingError
+import numpy as np
+import logging
+
+logger = logging.getLogger('gnomonic_projection.gnomonic.strategy')
+
+class GnomonicProjectionStrategy(BaseProjectionStrategy):
+    """
+    Projection Strategy for Gnomonic Projection.
+
+    This class implements the transformation logic for both forward (Equirectangular to Gnomonic)
+    and inverse (Gnomonic to Equirectangular) projections based on spherical trigonometry.
+    It ensures accurate mapping between geographic coordinates and planar projection coordinates.
+
+    ## Transformation Methods:
+
+    1. **Forward Transformation:**
+       Converts planar X and Y coordinates on the Gnomonic projection plane to geographic latitude and longitude.
+
+    2. **Inverse Transformation:**
+       Converts geographic latitude and longitude to planar X and Y coordinates on the Gnomonic projection plane.
+    """
+
+    def __init__(self, config: GnomonicConfig) -> None:
+        """
+        Initialize the GnomonicProjectionStrategy with the given configuration.
+
+        Args:
+            config (GnomonicConfig): The configuration object containing projection parameters.
+
+        Raises:
+            TypeError: If the config is not an instance of GnomonicConfig.
+        """
+        logger.debug("Initializing GnomonicProjectionStrategy.")
+        # Ensure the provided configuration is of the correct type
+        if not isinstance(config, GnomonicConfig):
+            error_msg = f"config must be an instance of GnomonicConfig, got {type(config)} instead."
+            logger.error(error_msg)
+            raise TypeError(error_msg)
+        self.config: GnomonicConfig = config
+        logger.info("GnomonicProjectionStrategy initialized successfully.")
+
+    def from_projection_to_spherical(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Perform inverse Gnomonic projection from planar grid coordinates to geographic coordinates.
+
+        This method converts planar X and Y coordinates on the Gnomonic projection plane to their corresponding
+        geographic latitude and longitude values.
+
+        Args:
+            x (np.ndarray): X-coordinates in the planar grid.
+            y (np.ndarray): Y-coordinates in the planar grid.
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: Arrays of latitude and longitude corresponding to the input grid points.
+
+        Raises:
+            ProcessingError: If the projection computation fails.
+        """
+        logger.debug("Starting inverse Gnomonic projection (Planar to Geographic).")
+        try:
+            # Convert projection center latitude and longitude from degrees to radians
+            phi1_rad, lam0_rad = np.deg2rad([self.config.phi1_deg, self.config.lam0_deg])
+            logger.debug(f"Projection center (phi1_rad, lam0_rad): ({phi1_rad}, {lam0_rad})")
+
+            # Calculate the radial distance from the projection center for each point
+            rho = np.sqrt(x**2 + y**2)
+            logger.debug("Computed rho (radial distances) from grid points.")
+
+            # Compute the auxiliary angle 'c' based on radial distance and Earth's radius
+            c = np.arctan2(rho, self.config.R)
+            sin_c, cos_c = np.sin(c), np.cos(c)
+            logger.debug(f"Computed auxiliary angles c, sin_c, cos_c for rho.")
+
+            # Calculate latitude (phi) using the inverse projection equation
+            phi = np.arcsin(cos_c * np.sin(phi1_rad) - (y * sin_c * np.cos(phi1_rad)) / rho)
+            logger.debug("Computed latitude (phi) for inverse projection.")
+
+            # Calculate longitude (lambda) using the inverse projection equation
+            lam = lam0_rad + np.arctan2(
+                x * sin_c,
+                rho * np.cos(phi1_rad) * cos_c + y * np.sin(phi1_rad) * sin_c
+            )
+            logger.debug("Computed longitude (lambda) for inverse projection.")
+
+            # Convert latitude and longitude from radians back to degrees
+            lat = np.rad2deg(phi)
+            lon = np.rad2deg(lam)
+            logger.debug("Converted phi and lambda from radians to degrees.")
+
+            logger.debug("Inverse Gnomonic projection computed successfully.")
+            return lat, lon
+        except Exception as e:
+            # Log the exception with traceback and raise a ProcessingError
+            error_msg = f"Failed during inverse Gnomonic projection: {e}"
+            logger.exception(error_msg)
+            raise ProcessingError(error_msg) from e
+
+    def from_spherical_to_projection(self, lat: np.ndarray, lon: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Perform forward Gnomonic projection from geographic coordinates to planar grid coordinates.
+
+        This method converts geographic latitude and longitude values to planar X and Y coordinates
+        on the Gnomonic projection plane.
+
+        Args:
+            lat (np.ndarray): Latitude values in degrees.
+            lon (np.ndarray): Longitude values in degrees.
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray, np.ndarray]: Arrays of X and Y planar coordinates and a mask indicating valid points.
+
+        Raises:
+            ProcessingError: If the projection computation fails.
+        """
+        logger.debug("Starting forward Gnomonic projection (Geographic to Planar).")
+        try:
+            # Convert projection center latitude and longitude from degrees to radians
+            phi1_rad, lam0_rad = np.deg2rad([self.config.phi1_deg, self.config.lam0_deg])
+            logger.debug(f"Projection center (phi1_rad, lam0_rad): ({phi1_rad}, {lam0_rad})")
+
+            # Convert input latitude and longitude from degrees to radians
+            phi_rad, lam_rad = np.deg2rad([lat, lon])
+            logger.debug("Converted input lat/lon to radians.")
+
+            # Compute cosine of the auxiliary angle 'c' using the projection equation
+            cos_c = (
+                np.sin(phi1_rad) * np.sin(phi_rad) +
+                np.cos(phi1_rad) * np.cos(phi_rad) * np.cos(lam_rad - lam0_rad)
+            )
+            logger.debug("Computed cos_c for forward projection.")
+
+            # Prevent division by zero by replacing zero values with a very small number
+            cos_c = np.where(cos_c == 0, 1e-10, cos_c)
+            logger.debug("Adjusted cos_c to avoid division by zero.")
+
+            # Calculate planar X coordinate using the forward projection equation
+            x = self.config.R * np.cos(phi_rad) * np.sin(lam_rad - lam0_rad) / cos_c
+            logger.debug("Computed X planar coordinates for forward projection.")
+
+            # Calculate planar Y coordinate using the forward projection equation
+            y = self.config.R * (
+                np.cos(phi1_rad) * np.sin(phi_rad) -
+                np.sin(phi1_rad) * np.cos(phi_rad) * np.cos(lam_rad - lam0_rad)
+            ) / cos_c
+            logger.debug("Computed Y planar coordinates for forward projection.")
+
+            # Generate a mask to identify valid projection points where cos_c > 0
+            mask = cos_c > 0
+            logger.debug("Generated mask for valid projection points (cos_c > 0).")
+
+            logger.debug("Forward Gnomonic projection computed successfully.")
+            return x, y, mask
+        except Exception as e:
+            # Log the exception with traceback and raise a ProcessingError
+            error_msg = f"Failed during forward Gnomonic projection: {e}"
+            logger.exception(error_msg)
+            raise ProcessingError(error_msg) from e
+
+### /Users/robinsongarcia/projects/gnomonic/projection//gnomonic/transform.py ###
+from typing import Tuple, Any
+import numpy as np
+import logging
+from ..exceptions import TransformationError, ConfigurationError
+from ..base.transform import BaseCoordinateTransformer
+# Configure logger for the transformation module
+logger = logging.getLogger('gnomonic_projection.gnomonic.transform')
+
+class GnomonicTransformer(BaseCoordinateTransformer):
+    """
+    Transformation Logic for Gnomonic Projection.
+
+    The `GnomonicTransformer` class handles the conversion between geographic coordinates
+    (latitude and longitude) and image coordinates on the Gnomonic projection plane. This conversion
+    is essential for preparing data before performing image interpolation, ensuring accurate mapping
+    between different projection systems.
+
+    ## Transformation Methods:
+
+    - **latlon_to_image_coords:** Converts geographic coordinates from an equirectangular image to image coordinates.
+    - **xy_to_image_coords:** Converts planar grid coordinates from the Gnomonic projection to image coordinates.
+    """
+
+    def __init__(self, config):
+        """
+        Initialize the GnomonicTransformer with the given configuration.
+
+        This initializer validates the provided configuration object to ensure that all
+        necessary attributes are present. It raises a ConfigurationError if any required
+        attribute is missing, preventing the transformer from operating with incomplete
+        or incorrect configurations.
+
+        Args:
+            config: Configuration object containing necessary projection parameters.
+
+        Raises:
+            ConfigurationError: If the configuration object lacks required attributes.
+        """
+        # Define the required attributes for the configuration
+        required_attributes = [
+            "lon_min",    # Minimum longitude value
+            "lon_max",    # Maximum longitude value
+            "lat_min",    # Minimum latitude value
+            "lat_max",    # Maximum latitude value
+            "fov_deg",    # Field of view in degrees
+            "R",          # Radius of the Earth or sphere being projected
+            "x_points",   # Number of points along the X-axis (width)
+            "y_points"    # Number of points along the Y-axis (height)
+        ]
+        # Check for any missing attributes in the configuration
+        missing_attributes = [attr for attr in required_attributes if not hasattr(config, attr)]
+
+        if missing_attributes:
+            # Log an error if any required attribute is missing
+            error_msg = f"Configuration object is missing required attributes: {', '.join(missing_attributes)}"
+            logger.error(error_msg)
+            raise ConfigurationError(error_msg)
+
+        # Store the validated configuration object for use in other methods
+        self.config = config
+        logger.info("GnomonicTransformer initialized successfully.")
+
+    def _validate_inputs(self, array: np.ndarray, name: str) -> None:
+        """
+        Validate input arrays to ensure they are NumPy arrays.
+
+        This helper method checks whether the provided input is an instance of NumPy's ndarray.
+        It raises a TransformationError if the input is not valid, ensuring that subsequent
+        computations operate on the correct data types.
+
+        Args:
+            array (np.ndarray): Input array to validate.
+            name (str): Name of the array for error messages.
+
+        Raises:
+            TransformationError: If the input is invalid (i.e., not a NumPy ndarray).
+        """
+        if not isinstance(array, np.ndarray):
+            # Log an error if the input is not a NumPy ndarray
+            error_msg = f"{name} must be a NumPy ndarray."
+            logger.error(error_msg)
+            raise TransformationError(error_msg)
+
+    def _compute_image_coords(
+        self, values: np.ndarray, min_val: float, max_val: float, size: int
+    ) -> np.ndarray:
+        """
+        Generalized method to compute normalized image coordinates.
+
+        This method normalizes input values (such as latitude, longitude, x, or y)
+        to fit within the dimensions of the target image. The normalization scales
+        the values to the range [0, size-1], where `size` corresponds to the width
+        or height of the image axis.
+
+        Args:
+            values (np.ndarray): Input values to normalize (e.g., latitudes, longitudes, x, y).
+            min_val (float): Minimum value for normalization.
+            max_val (float): Maximum value for normalization.
+            size (int): Size of the target axis (width or height of the image).
+
+        Returns:
+            np.ndarray: Normalized image coordinates scaled to [0, size-1].
+        """
+        # Perform normalization of the input values
+        normalized = (values - min_val) / (max_val - min_val) * (size - 1)
+        logger.debug(f"Computed normalized image coordinates: {normalized}")
+        return normalized
+
+    def spherical_to_image_coords(
+        self, lat: np.ndarray, lon: np.ndarray, shape: Tuple[int, int]
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        H, W = shape  # Extract image height and width
+ 
+        lon[lon>180] = 180 - lon[lon>180]
+        lat[lat>90] = 90 - lat[lat>90]
+        map_x = self._compute_image_coords(
+            lon, self.config.lon_min, self.config.lon_max, W
+        )
+        map_y = self._compute_image_coords(
+            lat, self.config.lat_max, self.config.lat_min, H
+        )
+        return map_x, map_y
+
+
+    def projection_to_image_coords(
+        self, x: np.ndarray, y: np.ndarray, config: Any
+    ) -> Tuple[np.ndarray, np.ndarray]:
+    
+        half_fov_rad = np.deg2rad(config.fov_deg / 2)  # Convert half FOV to radians
+        x_max = np.tan(half_fov_rad) * config.R          # Maximum X value based on FOV
+        y_max = np.tan(half_fov_rad) * config.R          # Maximum Y value based on FOV
+        x_min, y_min = -x_max, -y_max                    # Define minimum X and Y values
+
+        # Normalize planar X coordinates to image width based on grid bounds
+        map_x = self._compute_image_coords(x, x_min, x_max, config.x_points)
+
+        # Normalize planar Y coordinates to image height based on grid bounds
+        # Note: Y coordinates are typically mapped from top (y_max) to bottom (y_min)
+        map_y = self._compute_image_coords(y, y_max, y_min, config.y_points)
+
+        return map_x, map_y
+
+
+### /Users/robinsongarcia/projects/gnomonic/projection//logging_config.py ###
+### /Users/robinsongarcia/projects/gnomonic/projection/logging_config.py ###
+
+"""
+Logging configuration for the Gnomonic Projection module.
+"""
+
+import logging
+import sys
+
+def setup_logging():
+    """
+    Set up logging configuration.
+    """
+    logger = logging.getLogger('gnomonic_projection')
+    logger.setLevel(logging.DEBUG)  # Set to DEBUG to capture all levels of logs
+
+    # Create handlers
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)  # Set to INFO for console output
+
+    file_handler = logging.FileHandler('gnomonic_projection.log')
+    file_handler.setLevel(logging.DEBUG)  # Detailed logs in file
+
+    # Create formatters and add them to handlers
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    console_handler.setFormatter(formatter)
+    file_handler.setFormatter(formatter)
+
+    # Add handlers to the logger
+    if not logger.hasHandlers():
+        logger.addHandler(console_handler)
+        logger.addHandler(file_handler)
+
+    return logger
+
+### /Users/robinsongarcia/projects/gnomonic/projection//mercator/__init__.py ###
+from .config import MercatorConfig
+from .grid import MercatorGridGeneration
+from .strategy import MercatorProjectionStrategy
+
+__all__ = [
+    "MercatorConfig",
+    "MercatorGridGeneration",
+    "MercatorProjectionStrategy",
+]
+
+### /Users/robinsongarcia/projects/gnomonic/projection//mercator/config.py ###
+from typing import Any, Optional
+from pydantic import BaseModel, Field
+import cv2
+import logging
+from ..exceptions import ConfigurationError
+
+logger = logging.getLogger('projection.mercator.config')
+
+class MercatorConfigModel(BaseModel):
+    R: float = Field(1., description="Radius of the sphere (in kilometers).")
+    lon_min: float = Field(-180.0, description="Minimum longitude.")
+    lon_max: float = Field(180.0, description="Maximum longitude.")
+    lat_min: float = Field(-85.0, description="Minimum latitude (restricted for Mercator).")
+    lat_max: float = Field(85.0, description="Maximum latitude (restricted for Mercator).")
+    x_points: int = Field(1024, description="Number of points along the x-axis.")
+    y_points: int = Field(512, description="Number of points along the y-axis.")
+    fov_deg: float = Field(90.0, description="Field of view in degrees")
+    interpolation: Optional[int] = Field(default=cv2.INTER_LINEAR, description="Interpolation method for OpenCV remap")
+    borderMode: Optional[int] = Field(default=cv2.BORDER_CONSTANT, description="Border mode for OpenCV remap")
+    borderValue: Optional[Any] = Field(default=0, description="Border value for OpenCV remap")
+
+class MercatorConfig:
+    """
+    Configuration class for Mercator projection.
+    """
+    def __init__(self, **kwargs):
+        logger.debug("Initializing MercatorConfig with parameters: %s", kwargs)
+        try:
+            self.config = MercatorConfigModel(**kwargs)
+        except Exception as e:
+            logger.error("Failed to initialize MercatorConfig.")
+            raise ValueError(f"Configuration error: {e}")
+
+    def __repr__(self):
+        return f"MercatorConfig({self.config.dict()})"
+    
+
+    def update(self, **kwargs: Any) -> None:
+        logger.debug(f"Updating MercatorConfig with parameters: {kwargs}")
+        try:
+            updated_config = self.config.copy(update=kwargs)
+            self.config = updated_config
+            logger.info("MercatorConfig updated successfully.")
+        except Exception as e:
+            error_msg = f"Failed to update MercatorConfig: {e}"
+            logger.exception(error_msg)
+            raise ConfigurationError(error_msg) from e
+
+    def __getattr__(self, item: str) -> Any:
+        logger.debug(f"Accessing MercatorConfig attribute '{item}'.")
+        try:
+            return getattr(self.config, item)
+        except AttributeError:
+            error_msg = f"'MercatorConfig' object has no attribute '{item}'"
+            logger.error(error_msg)
+            raise AttributeError(error_msg) from None
+
+
+### /Users/robinsongarcia/projects/gnomonic/projection//mercator/grid.py ###
+from ..base.grid import BaseGridGeneration
+import numpy as np
+import logging
+
+logger = logging.getLogger('projection.mercator.grid')
+
+class MercatorGridGeneration(BaseGridGeneration):
+    """
+    Grid generation for Mercator projection.
+    """
+    def projection_grid(self):     
+        y_max = np.log(np.tan(np.pi / 4 + np.radians(self.config.config.lat_max) / 2))
+        y_min = np.log(np.tan(np.pi / 4 + np.radians(self.config.config.lat_min) / 2))
+        lat = np.linspace(y_min,y_max ,self.config.config.y_points)
+        lon = np.linspace(self.config.config.lon_min, self.config.config.lon_max, self.config.config.x_points)
+        lon = np.radians(lon)
+        grid_lon, grid_lat = np.meshgrid(lon, lat)
+        return grid_lon, grid_lat
+    def spherical_grid(self):
+        x = np.linspace(self.config.config.lon_min, self.config.config.lon_max, self.config.config.x_points)
+        y = np.linspace(self.config.config.lat_max, self.config.config.lat_min, self.config.config.y_points)
+        map_y, map_x =  np.meshgrid(x, y)
+        return map_x, map_y
+
+
+### /Users/robinsongarcia/projects/gnomonic/projection//mercator/strategy.py ###
+from ..base.strategy import BaseProjectionStrategy
+import numpy as np
+import logging
+
+logger = logging.getLogger('projection.mercator.strategy')
+
+class MercatorProjectionStrategy(BaseProjectionStrategy):
+    """
+    Projection strategy for Mercator projection.
+    """
+
+    def __init__(self, config):
+        self.config = config
+
+    def from_projection_to_spherical(self, lon: np.ndarray, lat: np.ndarray):
+        lon = lon / self.config.R
+        lat =  np.pi / 2 - 2 * np.arctan(np.e**(lat/ self.config.R))
+        logger.debug("Mercator forward projection computed successfully.")
+        return lat, lon # (lat,lon)
+
+
+    def from_spherical_to_projection(self, x: np.ndarray, y: np.ndarray):
+        lon_rad = np.radians(x)
+        lat_rad = np.radians(y)#_clamped)
+        x = 1 * lon_rad
+        y = 1 * np.log(np.tan(np.pi / 4 + lat_rad / 2))
+        mask = np.ones_like(x) == 1
+        return x, y, mask
+
+
+
+### /Users/robinsongarcia/projects/gnomonic/projection//mercator/transform.py ###
+from typing import Tuple, Any
+import numpy as np
+import logging
+from ..exceptions import TransformationError, ConfigurationError
+from ..base.transform import BaseCoordinateTransformer
+logger = logging.getLogger('projection.mercator.transform')
+
+
+class MercatorTransformer(BaseCoordinateTransformer):
+    """
+    Transformation logic for the Mercator projection.
+    """
+
+    def __init__(self, config):
+        """
+        Initialize the MercatorTransformer with the given configuration.
+
+        Args:
+            config: Configuration object with necessary parameters.
+        """
+        required_attributes = ["lon_min", "lon_max", "lat_min", "lat_max", "x_points", "y_points"]
+        missing_attributes = [attr for attr in required_attributes if not hasattr(config, attr)]
+
+        if missing_attributes:
+            error_msg = f"Configuration object is missing required attributes: {', '.join(missing_attributes)}"
+            logger.error(error_msg)
+            raise ConfigurationError(error_msg)
+
+        self.config = config
+        logger.info("MercatorTransformer initialized successfully.")
+
+    def spherical_to_image_coords(
+        self, lat: np.ndarray, lon: np.ndarray, shape: Tuple[int, int]
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Convert latitude and longitude to Mercator image coordinates.
+
+        Args:
+            lat (np.ndarray): Latitude values (degrees).
+            lon (np.ndarray): Longitude values (degrees).
+            shape (Tuple[int, int]): Shape of the target image (height, width).
 
         Returns:
             Tuple[np.ndarray, np.ndarray]: X and Y coordinates in image space.
@@ -488,27 +1407,656 @@ class CoordinateTransformer:
         Raises:
             TransformationError: If input arrays are invalid or computation fails.
         """
-        logger.debug("Transforming grid coordinates (x, y) to image coordinates.")
-        if not isinstance(x, np.ndarray) or not isinstance(y, np.ndarray):
-            error_msg = "x and y must be NumPy ndarrays."
-            logger.error(error_msg)
-            raise TransformationError(error_msg)
-
+        logger.debug("Transforming latitude and longitude to Mercator image coordinates.")
         try:
-            # Compute grid bounds dynamically based on FOV
-            half_fov_rad = np.deg2rad(config.fov_deg / 2)
-            x_max = np.tan(half_fov_rad) * config.R
-            y_max = np.tan(half_fov_rad) * config.R
-            x_min, y_min = -x_max, -y_max
+            if not isinstance(lat, np.ndarray) or not isinstance(lon, np.ndarray):
+                raise TypeError("Latitude and longitude must be numpy arrays.")
 
-            # Transform grid coordinates to image coordinates
-            map_x = (x - x_min) / (x_max - x_min) * (config.x_points - 1)
-            map_y = (y_max - y) / (y_max - y_min) * (config.y_points - 1)
-            logger.debug("Grid coordinates transformed to image coordinates successfully.")
+            H, W = shape
+
+            # Normalize longitude
+            # Normalize x and y to image space
+            
+            x=lon
+            y=lat
+            map_x = ((x / np.pi) * .5 + .5) * (self.config.x_points - 1)
+            map_y = (1 + -1*(( y / (np.pi/2) )* .5 + .5 ))* (self.config.y_points - 1)
+
+            print("MAP", map_y.max(), map_x.max())
+            
+            logger.debug("Latitude and longitude transformed successfully.")
+            return map_x, map_y
+
         except Exception as e:
-            error_msg = f"Failed to compute image coordinates: {e}"
+            logger.exception("Failed to transform latitude and longitude to Mercator image coordinates.")
+            raise TransformationError(f"Mercator lat/lon transformation failed: {e}")
+
+    def projection_to_image_coords(
+        self, x: np.ndarray, y: np.ndarray, shape: Tuple[int, int]
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Transform XY grid coordinates to Mercator image coordinates.
+
+        Args:
+            x (np.ndarray): X grid coordinates.
+            y (np.ndarray): Y grid coordinates.
+            shape (Tuple[int, int]): Shape of the target image (height, width).
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: X and Y coordinates in image space.
+
+        Raises:
+            TransformationError: If input arrays are invalid or computation fails.
+        """
+        logger.debug("Transforming XY grid coordinates to Mercator image coordinates.")
+        try:
+            if not isinstance(x, np.ndarray) or not isinstance(y, np.ndarray):
+                raise TypeError("Grid coordinates must be numpy arrays.")
+
+            H = self.config.y_points 
+            W = self.config.x_points 
+            lon = x
+            lat = y
+
+            y_max = np.log(np.tan(np.pi / 4 + np.radians(self.config.config.lat_max) / 2))
+            y_min = np.log(np.tan(np.pi / 4 + np.radians(self.config.config.lat_min) / 2))
+            #lat/=y_max
+            map_x = ((lon / np.radians(self.config.config.lon_max)) * .5 + .5) * ( self.config.x_points )
+
+            print(y_max,y_min)
+            print(lat)
+            map_y = ((lat - y_min) / (y_max - y_min) )* self.config.y_points 
+            print(map_y)
+
+
+            logger.debug("XY grid coordinates transformed successfully.")
+            return map_x, map_y
+
+        except Exception as e:
+            logger.exception("Failed to transform XY grid coordinates to Mercator image coordinates.")
+            raise TransformationError(f"Mercator XY transformation failed: {e}")
+
+### /Users/robinsongarcia/projects/gnomonic/projection//oblique_mercator/__init__.py ###
+# projection/oblique_mercator/__init__.py
+
+from .config import ObliqueMercatorConfig
+from .grid import ObliqueMercatorGridGeneration
+from .strategy import ObliqueMercatorProjectionStrategy
+from .transform import ObliqueMercatorTransformer
+
+__all__ = [
+    "ObliqueMercatorConfig",
+    "ObliqueMercatorGridGeneration",
+    "ObliqueMercatorProjectionStrategy",
+    "ObliqueMercatorTransformer",
+]
+
+### /Users/robinsongarcia/projects/gnomonic/projection//oblique_mercator/config.py ###
+# projection/oblique_mercator/config.py
+import logging
+from typing import Any, Optional
+from pydantic import BaseModel, Field, validator
+import cv2
+
+from ..exceptions import ConfigurationError
+
+logger = logging.getLogger("projection.oblique_mercator.config")
+
+class ObliqueMercatorConfigModel(BaseModel):
+    """
+    Configuration model (Pydantic) for the Oblique Mercator projection on a sphere.
+    Follows Snyder's formulas to define an oblique axis.
+    """
+    # Planet / sphere parameters
+    R: float = Field(6371.0, description="Radius of the sphere (in kilometers).")
+    k0: float = Field(1.0, description="Scale factor along the central line.")
+
+    # Central coordinates or defining lat/lon points
+    # For a simple approach, we can allow a single center lat/lon & azimuth
+    center_lat: float = Field(40.0, description="Center latitude for the oblique line (degrees).")
+    center_lon: float = Field(-100.0, description="Center longitude for the oblique line (degrees).")
+    azimuth_deg: float = Field(30.0, description="Azimuth east of north of the oblique central line.")
+
+    # Equirectangular bounding box
+    lon_min: float = Field(-180.0, description="Minimum longitude.")
+    lon_max: float = Field(180.0, description="Maximum longitude.")
+    lat_min: float = Field(-85.0, description="Minimum latitude.")
+    lat_max: float = Field(85.0, description="Maximum latitude.")
+
+    # Grid resolution
+    x_points: int = Field(1024, description="Number of points along the x-axis.")
+    y_points: int = Field(512, description="Number of points along the y-axis.")
+
+    # Field of view for forward-grid generation
+    fov_deg: float = Field(90.0, description="Field of view (degrees) for forward projection grids.")
+
+    # OpenCV interpolation parameters
+    interpolation: Optional[int] = Field(default=cv2.INTER_LINEAR, description="Interpolation method")
+    borderMode: Optional[int] = Field(default=cv2.BORDER_CONSTANT, description="OpenCV border mode")
+    borderValue: Optional[Any] = Field(default=0, description="OpenCV border value")
+
+    @validator('fov_deg')
+    def validate_fov(cls, v):
+        if not (0 < v <= 180):
+            raise ValueError("fov_deg must be in range (0, 180].")
+        return v
+
+class ObliqueMercatorConfig:
+    """
+    Wrapper for the Pydantic model to integrate with the BaseProjectionConfig in your system.
+    """
+    def __init__(self, **kwargs: Any):
+        logger.debug("Initializing ObliqueMercatorConfig with parameters: %s", kwargs)
+        try:
+            self.config = ObliqueMercatorConfigModel(**kwargs)
+            logger.info("ObliqueMercatorConfig initialized successfully.")
+        except Exception as e:
+            error_msg = f"Failed to initialize ObliqueMercatorConfig: {e}"
             logger.exception(error_msg)
-            raise TransformationError(error_msg) from e
+            raise ConfigurationError(error_msg) from e
+
+    def update(self, **kwargs: Any) -> None:
+        logger.debug(f"Updating ObliqueMercatorConfig with parameters: {kwargs}")
+        try:
+            updated = self.config.copy(update=kwargs)
+            self.config = updated
+            logger.info("ObliqueMercatorConfig updated successfully.")
+        except Exception as e:
+            error_msg = f"Failed to update ObliqueMercatorConfig: {e}"
+            logger.exception(error_msg)
+            raise ConfigurationError(error_msg) from e
+
+    def __getattr__(self, item: str) -> Any:
+        try:
+            return getattr(self.config, item)
+        except AttributeError:
+            error_msg = f"'ObliqueMercatorConfig' object has no attribute '{item}'"
+            logger.error(error_msg)
+            raise AttributeError(error_msg)
+
+    def __repr__(self) -> str:
+        return f"ObliqueMercatorConfig({self.config.dict()})"
+
+### /Users/robinsongarcia/projects/gnomonic/projection//oblique_mercator/grid.py ###
+# projection/oblique_mercator/grid.py
+import numpy as np
+import logging
+from typing import Tuple
+from ..base.grid import BaseGridGeneration
+
+logger = logging.getLogger("projection.oblique_mercator.grid")
+
+class ObliqueMercatorGridGeneration(BaseGridGeneration):
+    """
+    Generates the forward (x, y) grid and the backward (lon, lat) grid.
+    """
+
+    def projection_grid(self) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Produce (x_grid, y_grid) for the forward projection.
+        We treat fov_deg to define the maximum extent in x,y (similar to Gnomonic).
+        """
+        half_fov_rad = np.deg2rad(self.config.fov_deg / 2.0)
+        x_extent = np.tan(half_fov_rad) * self.config.R
+        y_extent = np.tan(half_fov_rad) * self.config.R
+
+        x_vals = np.linspace(-x_extent, x_extent, self.config.x_points)
+        y_vals = np.linspace(-y_extent, y_extent, self.config.y_points)
+        grid_x, grid_y = np.meshgrid(x_vals, y_vals)
+        return grid_x, grid_y
+
+    def spherical_grid(self) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Produce (lon_grid, lat_grid) for the backward projection.
+        """
+        lon_vals = np.linspace(self.config.lon_min, self.config.lon_max, self.config.x_points)
+        lat_vals = np.linspace(self.config.lat_min, self.config.lat_max, self.config.y_points)
+        grid_lon, grid_lat = np.meshgrid(lon_vals, lat_vals)
+        return grid_lon, grid_lat
+
+### /Users/robinsongarcia/projects/gnomonic/projection//oblique_mercator/strategy.py ###
+# projection/oblique_mercator/strategy.py
+import numpy as np
+import math
+import logging
+
+from ..base.strategy import BaseProjectionStrategy
+
+logger = logging.getLogger("projection.oblique_mercator.strategy")
+
+class ObliqueMercatorProjectionStrategy(BaseProjectionStrategy):
+    """
+    Implements the forward (lat, lon -> x, y) and inverse (x, y -> lat, lon) 
+    for an Oblique Mercator projection (Snyder, USGS Paper 1395).
+    """
+
+    def __init__(self, config):
+        """
+        We'll store intermediate parameters (φp, λp, etc.) for the oblique transformation.
+        """
+        super().__init__(config)
+        # Precompute some radians:
+        self.phi_c = math.radians(self.config.center_lat)
+        self.lam_c = math.radians(self.config.center_lon)
+        self.beta  = math.radians(self.config.azimuth_deg)
+        self.R     = self.config.R
+        self.k0    = self.config.k0
+
+        # Following Snyder eqn (9-7),(9-8) for a single center lat/lon & azimuth:
+        #   φp = arcsin(cos φc sin β) 
+        #   λp = λc + arctan[ - cos β / (- sin φc sin β) ] 
+        # We'll store them for use in forward/backward.
+
+        self.phi_p = math.asin(math.cos(self.phi_c)*math.sin(self.beta))
+
+        top = -math.cos(self.beta)
+        bot = -math.sin(self.phi_c)*math.sin(self.beta)
+        delta_lam = math.atan2(top, bot)
+        self.lam_p = self.lam_c + delta_lam
+
+        # For convenience, define λ0 = λp + π/2:
+        self.lam0 = self.lam_p + math.pi / 2
+
+        logger.debug(f"ObliqueMercatorProjectionStrategy: phi_p={self.phi_p}, lam_p={self.lam_p}, lam0={self.lam0}")
+
+    def from_spherical_to_projection(self, lat: np.ndarray, lon: np.ndarray):
+        """
+        Forward: (lat, lon) in degrees -> (x, y) in projection coords.
+        Return (x, y, mask).
+        """
+        # Convert to radians
+        lat_rad = np.radians(lat)
+        lon_rad = np.radians(lon)
+
+        phi_p = self.phi_p
+        lam0  = self.lam0
+        R     = self.R
+        k0    = self.k0
+
+        # Eqn (9-6) A = sin φp sin φ - cos φp cos φ sin(λ - λ0)
+        A = (np.sin(phi_p)*np.sin(lat_rad)
+             - np.cos(phi_p)*np.cos(lat_rad)*np.sin(lon_rad - lam0))
+
+        # Eqn (9-3): x = Rk0 arctan( B ), B = [tan φp + sin φp sin(λ-λ0)] / cos(λ-λ0)
+        # We'll define partial for B:
+        top    = np.tan(phi_p) + np.sin(phi_p)*np.sin(lon_rad - lam0)
+        bottom = np.cos(lon_rad - lam0)
+        B      = top / bottom
+        x      = R * k0 * np.arctan(B)
+
+        # Eqn (9-4): y = (R k0 / 2) ln( (1 + A)/(1 - A) ), or Rk0 atanh(A)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            denom = (1 - A)
+            numer = (1 + A)
+            y = R * k0 * 0.5 * np.log(np.where(denom != 0, numer / denom, 1e15))
+
+        # Mask: we can define valid region if |A|<1, for instance
+        mask = np.abs(A) < 1.0
+
+        return x, y, mask
+
+    def from_projection_to_spherical(self, x: np.ndarray, y: np.ndarray):
+        """
+        Inverse: (x, y) -> (lat, lon) in degrees.
+        Using eqns (9-9),(9-10).
+        """
+        phi_p = self.phi_p
+        lam0  = self.lam0
+        R     = self.R
+        k0    = self.k0
+
+        xi  = x / (R*k0)
+        eta = y / (R*k0)
+
+        # eqn (9-9): φ = arcsin[ sin φp tanh(eta) + cos φp sin(xi)/cosh(eta) ]
+        sin_phi_p = math.sin(phi_p)
+        cos_phi_p = math.cos(phi_p)
+
+        # We'll compute them in vectorized form using np:
+        sinh_eta = np.sinh(eta)
+        cosh_eta = np.cosh(eta)
+        sin_xi   = np.sin(xi)
+        inside   = sin_phi_p*(sinh_eta/cosh_eta) + cos_phi_p*(sin_xi/cosh_eta)
+        lat_rad  = np.arcsin(inside)
+
+        # eqn (9-10): λ = λ0 + atan2( sin φp sin(xi) - cos φp tanh(eta),
+        #                            cos φp cos(xi) )
+        top = sin_phi_p*np.sin(xi) - cos_phi_p*(sinh_eta/cosh_eta)
+        bot = cos_phi_p*np.cos(xi)
+        lon_rad = lam0 + np.arctan2(top, bot)
+
+        lat_deg = np.degrees(lat_rad)
+        lon_deg = np.degrees(lon_rad)
+
+        return lat_deg, lon_deg
+
+### /Users/robinsongarcia/projects/gnomonic/projection//oblique_mercator/transform.py ###
+# projection/oblique_mercator/transform.py
+import numpy as np
+import logging
+from ..base.transform import BaseCoordinateTransformer
+
+logger = logging.getLogger("projection.oblique_mercator.transform")
+
+class ObliqueMercatorTransformer(BaseCoordinateTransformer):
+    """
+    Maps (lat, lon) <-> (image coords) and (x, y) <-> (image coords),
+    using the bounding box in the config for the equirectangular input 
+    and the (fov_deg) approach for the forward-projection.
+    """
+
+    def spherical_to_image_coords(self, lat: np.ndarray, lon: np.ndarray, shape: tuple):
+        """
+        Map lat/lon [in degrees] onto equirectangular image coords (map_x, map_y).
+        Equirect image shape: (height=H, width=W).
+        """
+        self._validate_inputs(lat, "lat")
+        self._validate_inputs(lon, "lon")
+
+        H, W = shape[:2]
+        # Map longitude from [lon_min, lon_max] to [0, W-1]
+        map_x = (lon - self.config.lon_min) / (self.config.lon_max - self.config.lon_min) * (W - 1)
+
+        # Map latitude from [lat_max, lat_min] => [0, H-1] top to bottom
+        map_y = (self.config.lat_max - lat) / (self.config.lat_max - self.config.lat_min) * (H - 1)
 
         return map_x, map_y
+
+    def projection_to_image_coords(self, x: np.ndarray, y: np.ndarray, shape: tuple):
+        """
+        Map oblique (x, y) coords onto a 'rectilinear' image of size (x_points, y_points).
+        Using fov_deg to define the max extent in x,y as ± R*tan(fov/2).
+        """
+        self._validate_inputs(x, "x")
+        self._validate_inputs(y, "y")
+
+        half_fov_rad = np.deg2rad(self.config.fov_deg / 2.0)
+        max_val = np.tan(half_fov_rad) * self.config.R
+        min_val = -max_val
+
+        W, H = self.config.x_points, self.config.y_points
+
+        map_x = (x - min_val) / (max_val - min_val) * (W - 1)
+        map_y = (max_val - y) / (max_val - min_val) * (H - 1)
+
+        return map_x, map_y
+
+### /Users/robinsongarcia/projects/gnomonic/projection//processor.py ###
+### /Users/robinsongarcia/projects/gnomonic/projection/processor.py ###
+
+from typing import Any, Optional, Tuple
+from .base.config import BaseProjectionConfig
+from .exceptions import ProcessingError, InterpolationError, GridGenerationError, TransformationError
+import logging
+import cv2
+import numpy as np
+
+# Initialize logger for this module
+logger = logging.getLogger('gnomonic_projection.processor')
+
+
+class ProjectionProcessor:
+    """
+    Processor for handling forward and backward projections using the provided configuration.
+    """
+    def __init__(self, config: BaseProjectionConfig) -> None:
+        """
+        Initialize the ProjectionProcessor with a given configuration.
+
+        Args:
+            config (BaseProjectionConfig): The projection configuration.
+
+        Raises:
+            TypeError: If 'config' is not an instance of BaseProjectionConfig.
+            ProcessingError: If initialization of components fails.
+        """
+        logger.debug("Initializing ProjectionProcessor.")
+        if not isinstance(config, BaseProjectionConfig):
+            error_msg = f"config must be an instance of BaseProjectionConfig, got {type(config)} instead."
+            logger.error(error_msg)
+            raise TypeError(error_msg)
+
+        self.config: BaseProjectionConfig = config
+        try:
+            self.projection = config.create_projection()
+            self.grid_generation = config.create_grid_generation()
+            self.interpolation = config.create_interpolation()
+            self.transformer = config.create_transformer()  # Initialize transformer
+            logger.info("ProjectionProcessor components initialized successfully.")
+        except Exception as e:
+            error_msg = f"Failed to initialize ProjectionProcessor components: {e}"
+            logger.exception(error_msg)
+            raise ProcessingError(error_msg) from e
+
+    
+    def forward(self, img: np.ndarray, **kwargs: Any) -> np.ndarray:
+        """
+        Forward projection of an image.
+
+        Args:
+            img (np.ndarray): The input equirectangular image.
+            **kwargs (Any): Additional parameters to override projection configuration.
+
+        Returns:
+            np.ndarray: Projected rectilinear image.
+
+        Raises:
+            ValueError: If the input image is not a valid NumPy array.
+            GridGenerationError: If grid generation fails.
+            ProcessingError: If forward projection fails.
+            TransformationError: If coordinate transformation fails.
+            InterpolationError: If interpolation fails.
+        """
+        logger.debug("Starting forward projection.")
+        if not isinstance(img, np.ndarray):
+            error_msg = "Input image must be a NumPy ndarray."
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        try:
+            self.config.update(**kwargs)
+            logger.debug(f"Configuration updated with parameters: {kwargs}")
+
+            x_grid, y_grid = self.grid_generation.projection_grid()
+            logger.debug("Forward grid generated successfully.")
+
+            lat, lon = self.projection.from_projection_to_spherical(x_grid, y_grid)
+            logger.debug("Forward projection computed successfully.")
+
+            map_x, map_y = self.transformer.spherical_to_image_coords(lat, lon, img.shape[:2])
+            logger.debug("Coordinates transformed to image space successfully.")
+
+            projected_img = self.interpolation.interpolate(img, map_x, map_y)
+            logger.info("Forward projection completed successfully.")
+            return projected_img
+
+        except (GridGenerationError, ProcessingError, TransformationError, InterpolationError) as e:
+            logger.error(f"Forward projection failed: {e}")
+            raise
+        except Exception as e:
+            logger.exception("Unexpected error during forward projection.")
+            raise ProcessingError(f"Unexpected error during forward projection: {e}")
+
+    def backward(self, rect_img: np.ndarray, **kwargs: Any) -> np.ndarray:
+        """
+        Backward projection of a rectilinear image to equirectangular.
+
+        Args:
+            rect_img (np.ndarray): The rectilinear image.
+            **kwargs (Any): Additional parameters to override projection configuration.
+
+        Returns:
+            np.ndarray: Back-projected equirectangular image.
+
+        Raises:
+            ValueError: If the input image is not a valid NumPy array.
+            GridGenerationError: If grid generation fails.
+            ProcessingError: If backward projection fails.
+            TransformationError: If coordinate transformation fails.
+            InterpolationError: If interpolation fails.
+        """
+        logger.debug("Starting backward projection.")
+        if not isinstance(rect_img, np.ndarray):
+            error_msg = "Rectilinear image must be a NumPy ndarray."
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        try:
+            self.config.update(**kwargs)
+            logger.debug(f"Configuration updated with parameters: {kwargs}")
+
+            lon_grid, lat_grid = self.grid_generation.spherical_grid()
+            logger.debug("Backward grid generated successfully.")
+
+            x, y, mask = self.projection.from_spherical_to_projection(lat_grid, lon_grid)
+            logger.debug("Backward projection computed successfully.")
+
+            # Use config_object instead of `config.config`
+            map_x, map_y = self.transformer.projection_to_image_coords(x, y, self.config.config_object)
+            logger.debug("Grid coordinates transformed to image space successfully.")
+
+            back_projected_img = self.interpolation.interpolate(
+                rect_img, map_x, map_y, mask if kwargs.get("return_mask", True) else None
+            )
+            logger.info("Backward projection completed successfully.")
+            return cv2.flip(back_projected_img,0)
+
+        except (GridGenerationError, ProcessingError, TransformationError, InterpolationError) as e:
+            logger.error(f"Backward projection failed: {e}")
+            raise
+        except Exception as e:
+            logger.exception("Unexpected error during backward projection.")
+            raise ProcessingError(f"Unexpected error during backward projection: {e}")
+
+### /Users/robinsongarcia/projects/gnomonic/projection//registry.py ###
+from typing import Any, Dict, Optional, Type, Union
+from .base.config import BaseProjectionConfig
+from .processor import ProjectionProcessor
+from .exceptions import RegistrationError
+import logging
+
+# Initialize logger for this module
+logger = logging.getLogger('gnomonic_projection.registry')
+
+class ProjectionRegistry:
+    """
+    Registry for managing projection configurations and their components.
+    """
+    _registry: Dict[str, Dict[str, Type[Any]]] = {}
+
+    @classmethod
+    def register(cls, name: str, components: Dict[str, Type[Any]]) -> None:
+        """
+        Register a projection with its required components.
+
+        Args:
+            name (str): Name of the projection (e.g., 'gnomonic').
+            components (Dict[str, Type[Any]]): A dictionary containing:
+                - 'config': Configuration class
+                - 'grid_generation': Grid generation class
+                - 'projection_strategy': Projection strategy class
+                - 'interpolation' (optional): Interpolation class
+                - 'transformer': Transformation class (optional)
+
+        Raises:
+            RegistrationError: If required components are missing or invalid.
+        """
+        logger.debug(f"Attempting to register projection '{name}' with components: {list(components.keys())}")
+        required_keys = {"config", "grid_generation", "projection_strategy"}
+        missing_keys = required_keys - components.keys()
+        if missing_keys:
+            error_msg = f"Components must include {required_keys}. Missing keys: {missing_keys}"
+            logger.error(error_msg)
+            raise RegistrationError(error_msg)
+
+        # Optional 'interpolation' and 'transformer' components
+        for key in ["interpolation", "transformer"]:
+            if key in components:
+                if not isinstance(components[key], type):
+                    error_msg = f"'{key}' component must be a class type."
+                    logger.error(error_msg)
+                    raise RegistrationError(error_msg)
+                logger.debug(f"'{key}' component validated as a class type.")
+
+        cls._registry[name] = components
+        logger.info(f"Projection '{name}' registered successfully.")
+
+    @classmethod
+    def get_projection(
+        cls, 
+        name: str, 
+        return_processor: bool = False, 
+        **kwargs: Any
+    ) -> Union[BaseProjectionConfig, ProjectionProcessor]:
+        """
+        Retrieve a configured projection by name.
+
+        Args:
+            name (str): Name of the projection to retrieve.
+            return_processor (bool): Whether to return the processor instead of the config.
+            **kwargs (Any): Configuration parameters to override defaults.
+
+        Returns:
+            Union[BaseProjectionConfig, ProjectionProcessor]: Depending on `return_processor`.
+
+        Raises:
+            RegistrationError: If the projection name is not found or components are missing.
+            ProcessingError: If instantiation of configuration fails.
+        """
+        logger.debug(f"Retrieving projection '{name}' with override parameters: {kwargs}")
+        if name not in cls._registry:
+            error_msg = f"Projection '{name}' not found in the registry."
+            logger.error(error_msg)
+            raise RegistrationError(error_msg)
+
+        # Retrieve components
+        components = cls._registry[name]
+        try:
+            ConfigClass = components["config"]
+            GridGenerationClass = components["grid_generation"]
+            ProjectionStrategyClass = components["projection_strategy"]
+            InterpolationClass = components.get("interpolation", None)
+            TransformerClass = components.get("transformer", None)
+            logger.debug(f"Components for projection '{name}': {list(components.keys())}")
+        except KeyError as e:
+            error_msg = f"Missing component in the registry: {e}"
+            logger.error(error_msg)
+            raise RegistrationError(error_msg) from e
+
+        # Instantiate the configuration object
+        try:
+            config_instance = ConfigClass(**kwargs)
+            logger.debug(f"Configuration instance for projection '{name}' created successfully.")
+        except Exception as e:
+            error_msg = f"Failed to instantiate config class '{ConfigClass.__name__}': {e}"
+            logger.exception(error_msg)
+            raise RegistrationError(error_msg) from e
+
+        # Create a BaseProjectionConfig and attach the necessary methods
+        base_config = BaseProjectionConfig(config_instance)
+        base_config.create_projection = lambda: ProjectionStrategyClass(config_instance)
+        base_config.create_grid_generation = lambda: GridGenerationClass(config_instance)
+        if InterpolationClass:
+            base_config.create_interpolation = lambda: InterpolationClass(config_instance)
+        if TransformerClass:
+            base_config.create_transformer = lambda: TransformerClass(config_instance)
+        if return_processor:
+            logger.debug(f"Returning ProjectionProcessor for projection '{name}'.")
+            return ProjectionProcessor(base_config)
+
+        logger.debug(f"Returning BaseProjectionConfig for projection '{name}'.")
+        return base_config
+
+    @classmethod
+    def list_projections(cls) -> list:
+        """
+        List all registered projections.
+
+        Returns:
+            list: A list of projection names.
+        """
+        logger.debug("Listing all registered projections.")
+        projections = list(cls._registry.keys())
+        logger.info(f"Registered projections: {projections}")
+        return projections
 

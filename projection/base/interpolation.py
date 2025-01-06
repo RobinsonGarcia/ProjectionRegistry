@@ -1,4 +1,4 @@
-### /Users/robinsongarcia/projects/gnomonic/projection/base/interpolation.py ###
+# /Users/robinsongarcia/projects/gnomonic/projection/base/interpolation.py
 
 from typing import Any, Optional
 import cv2
@@ -13,6 +13,7 @@ class BaseInterpolation:
     """
     Base class for image interpolation in projections.
     """
+
     def __init__(self, config: Any) -> None:
         """
         Initialize the interpolation with the given configuration.

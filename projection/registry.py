@@ -1,3 +1,5 @@
+# /Users/robinsongarcia/projects/gnomonic/projection/registry.py
+
 from typing import Any, Dict, Optional, Type, Union
 from .base.config import BaseProjectionConfig
 from .processor import ProjectionProcessor
@@ -6,7 +8,6 @@ import logging
 
 # Initialize logger for this module
 logger = logging.getLogger('gnomonic_projection.registry')
-
 
 class ProjectionRegistry:
     """
@@ -39,7 +40,6 @@ class ProjectionRegistry:
             logger.error(error_msg)
             raise RegistrationError(error_msg)
 
-        # Optional 'interpolation' and 'transformer' components
         for key in ["interpolation", "transformer"]:
             if key in components:
                 if not isinstance(components[key], type):
@@ -71,7 +71,6 @@ class ProjectionRegistry:
 
         Raises:
             RegistrationError: If the projection name is not found or components are missing.
-            ProcessingError: If instantiation of configuration fails.
         """
         logger.debug(f"Retrieving projection '{name}' with override parameters: {kwargs}")
         if name not in cls._registry:
@@ -79,7 +78,6 @@ class ProjectionRegistry:
             logger.error(error_msg)
             raise RegistrationError(error_msg)
 
-        # Retrieve components
         components = cls._registry[name]
         try:
             ConfigClass = components["config"]
@@ -110,6 +108,7 @@ class ProjectionRegistry:
             base_config.create_interpolation = lambda: InterpolationClass(config_instance)
         if TransformerClass:
             base_config.create_transformer = lambda: TransformerClass(config_instance)
+
         if return_processor:
             logger.debug(f"Returning ProjectionProcessor for projection '{name}'.")
             return ProjectionProcessor(base_config)

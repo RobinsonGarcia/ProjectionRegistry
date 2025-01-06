@@ -1,3 +1,5 @@
+# /Users/robinsongarcia/projects/gnomonic/projection/mercator/config.py
+
 from typing import Any, Optional
 from pydantic import BaseModel, Field
 import cv2
@@ -7,6 +9,22 @@ from ..exceptions import ConfigurationError
 logger = logging.getLogger('projection.mercator.config')
 
 class MercatorConfigModel(BaseModel):
+    """
+    Pydantic model for the Mercator projection.
+
+    Attributes:
+        R (float): Radius of the sphere.
+        lon_min (float): Minimum longitude.
+        lon_max (float): Maximum longitude.
+        lat_min (float): Minimum latitude.
+        lat_max (float): Maximum latitude.
+        x_points (int): Number of points along the x-axis.
+        y_points (int): Number of points along the y-axis.
+        fov_deg (float): Field of view in degrees.
+        interpolation (Optional[int]): Interpolation method for OpenCV remap.
+        borderMode (Optional[int]): Border mode for OpenCV remap.
+        borderValue (Optional[Any]): Border value for OpenCV remap.
+    """
     R: float = Field(1., description="Radius of the sphere (in kilometers).")
     lon_min: float = Field(-180.0, description="Minimum longitude.")
     lon_max: float = Field(180.0, description="Maximum longitude.")
@@ -23,7 +41,17 @@ class MercatorConfig:
     """
     Configuration class for Mercator projection.
     """
+
     def __init__(self, **kwargs):
+        """
+        Initialize the MercatorConfig with specified parameters.
+
+        Args:
+            **kwargs: Arbitrary keyword arguments for config parameters.
+
+        Raises:
+            ValueError: If initialization fails due to invalid configuration.
+        """
         logger.debug("Initializing MercatorConfig with parameters: %s", kwargs)
         try:
             self.config = MercatorConfigModel(**kwargs)
@@ -32,10 +60,24 @@ class MercatorConfig:
             raise ValueError(f"Configuration error: {e}")
 
     def __repr__(self):
+        """
+        Return a string representation of the MercatorConfig.
+
+        Returns:
+            str: Stringified config dictionary.
+        """
         return f"MercatorConfig({self.config.dict()})"
-    
 
     def update(self, **kwargs: Any) -> None:
+        """
+        Dynamically update the Mercator configuration.
+
+        Args:
+            **kwargs (Any): Configuration parameters to update.
+
+        Raises:
+            ConfigurationError: If an error occurs during update.
+        """
         logger.debug(f"Updating MercatorConfig with parameters: {kwargs}")
         try:
             updated_config = self.config.copy(update=kwargs)
@@ -47,6 +89,18 @@ class MercatorConfig:
             raise ConfigurationError(error_msg) from e
 
     def __getattr__(self, item: str) -> Any:
+        """
+        Access configuration parameters as attributes.
+
+        Args:
+            item (str): Attribute name.
+
+        Returns:
+            Any: The value of the attribute if it exists.
+
+        Raises:
+            AttributeError: If the attribute does not exist.
+        """
         logger.debug(f"Accessing MercatorConfig attribute '{item}'.")
         try:
             return getattr(self.config, item)

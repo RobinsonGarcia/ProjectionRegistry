@@ -1,3 +1,4 @@
+# /Users/robinsongarcia/projects/gnomonic/projection/oblique_mercator/grid.py
 # projection/oblique_mercator/grid.py
 import numpy as np
 import logging
@@ -13,9 +14,12 @@ class ObliqueMercatorGridGeneration(BaseGridGeneration):
 
     def projection_grid(self) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Produce (x_grid, y_grid) for the forward projection.
-        We treat fov_deg to define the maximum extent in x,y (similar to Gnomonic).
+        Produce (x_grid, y_grid) for the forward projection in Oblique Mercator.
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: X and Y grids for forward projection.
         """
+        logger.debug("Generating Oblique Mercator projection grid.")
         half_fov_rad = np.deg2rad(self.config.fov_deg / 2.0)
         x_extent = np.tan(half_fov_rad) * self.config.R
         y_extent = np.tan(half_fov_rad) * self.config.R
@@ -27,8 +31,12 @@ class ObliqueMercatorGridGeneration(BaseGridGeneration):
 
     def spherical_grid(self) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Produce (lon_grid, lat_grid) for the backward projection.
+        Produce (lon_grid, lat_grid) for the backward projection in Oblique Mercator.
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: Longitude and latitude grids.
         """
+        logger.debug("Generating Oblique Mercator spherical grid.")
         lon_vals = np.linspace(self.config.lon_min, self.config.lon_max, self.config.x_points)
         lat_vals = np.linspace(self.config.lat_min, self.config.lat_max, self.config.y_points)
         grid_lon, grid_lat = np.meshgrid(lon_vals, lat_vals)

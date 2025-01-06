@@ -1,4 +1,4 @@
-### /Users/robinsongarcia/projects/gnomonic/projection/logging_config.py ###
+# /Users/robinsongarcia/projects/gnomonic/projection/logging_config.py
 
 """
 Logging configuration for the Gnomonic Projection module.
@@ -10,6 +10,9 @@ import sys
 def setup_logging():
     """
     Set up logging configuration.
+
+    Returns:
+        logging.Logger: Configured logger for the 'gnomonic_projection' namespace.
     """
     logger = logging.getLogger('gnomonic_projection')
     logger.setLevel(logging.DEBUG)  # Set to DEBUG to capture all levels of logs

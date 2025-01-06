@@ -1,10 +1,12 @@
+# /Users/robinsongarcia/projects/gnomonic/projection/mercator/transform.py
+
 from typing import Tuple, Any
 import numpy as np
 import logging
 from ..exceptions import TransformationError, ConfigurationError
 from ..base.transform import BaseCoordinateTransformer
-logger = logging.getLogger('projection.mercator.transform')
 
+logger = logging.getLogger('projection.mercator.transform')
 
 class MercatorTransformer(BaseCoordinateTransformer):
     """
@@ -17,7 +19,11 @@ class MercatorTransformer(BaseCoordinateTransformer):
 
         Args:
             config: Configuration object with necessary parameters.
+
+        Raises:
+            ConfigurationError: If required attributes are missing.
         """
+        logger.debug("Initializing MercatorTransformer.")
         required_attributes = ["lon_min", "lon_max", "lat_min", "lat_max", "x_points", "y_points"]
         missing_attributes = [attr for attr in required_attributes if not hasattr(config, attr)]
 
@@ -36,8 +42,8 @@ class MercatorTransformer(BaseCoordinateTransformer):
         Convert latitude and longitude to Mercator image coordinates.
 
         Args:
-            lat (np.ndarray): Latitude values (degrees).
-            lon (np.ndarray): Longitude values (degrees).
+            lat (np.ndarray): Latitude values in degrees.
+            lon (np.ndarray): Longitude values in degrees.
             shape (Tuple[int, int]): Shape of the target image (height, width).
 
         Returns:
@@ -53,16 +59,12 @@ class MercatorTransformer(BaseCoordinateTransformer):
 
             H, W = shape
 
-            # Normalize longitude
-            # Normalize x and y to image space
-            
-            x=lon
-            y=lat
+            # Very simplistic placeholder logic (not a real Mercator transformation).
+            x = lon
+            y = lat
             map_x = ((x / np.pi) * .5 + .5) * (self.config.x_points - 1)
             map_y = (1 + -1*(( y / (np.pi/2) )* .5 + .5 ))* (self.config.y_points - 1)
 
-            print("MAP", map_y.max(), map_x.max())
-            
             logger.debug("Latitude and longitude transformed successfully.")
             return map_x, map_y
 
@@ -92,21 +94,17 @@ class MercatorTransformer(BaseCoordinateTransformer):
             if not isinstance(x, np.ndarray) or not isinstance(y, np.ndarray):
                 raise TypeError("Grid coordinates must be numpy arrays.")
 
-            H = self.config.y_points 
-            W = self.config.x_points 
+            H = self.config.y_points
+            W = self.config.x_points
             lon = x
             lat = y
 
             y_max = np.log(np.tan(np.pi / 4 + np.radians(self.config.config.lat_max) / 2))
             y_min = np.log(np.tan(np.pi / 4 + np.radians(self.config.config.lat_min) / 2))
-            #lat/=y_max
-            map_x = ((lon / np.radians(self.config.config.lon_max)) * .5 + .5) * ( self.config.x_points )
 
-            print(y_max,y_min)
-            print(lat)
-            map_y = ((lat - y_min) / (y_max - y_min) )* self.config.y_points 
-            print(map_y)
+            map_x = ((lon / np.radians(self.config.config.lon_max)) * .5 + .5) * (self.config.x_points)
 
+            map_y = ((lat - y_min) / (y_max - y_min)) * self.config.y_points
 
             logger.debug("XY grid coordinates transformed successfully.")
             return map_x, map_y

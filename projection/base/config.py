@@ -1,3 +1,5 @@
+# /Users/robinsongarcia/projects/gnomonic/projection/base/config.py
+
 from typing import Any, Dict, Optional
 from pydantic import BaseModel, Field, validator
 from ..base.interpolation import BaseInterpolation
@@ -8,10 +10,17 @@ import logging
 logger = logging.getLogger('gnomonic_projection.base.config')
 
 class BaseProjectionConfigModel(BaseModel):
+    """
+    Pydantic model holding basic projection configuration parameters.
+
+    Attributes:
+        interpolation (Optional[int]): Interpolation method for OpenCV remap.
+        borderMode (Optional[int]): Border mode for OpenCV remap.
+        borderValue (Optional[Any]): Border value for OpenCV remap.
+    """
     interpolation: Optional[int] = Field(default=0, description="Interpolation method for OpenCV remap")
     borderMode: Optional[int] = Field(default=0, description="Border mode for OpenCV remap")
     borderValue: Optional[Any] = Field(default=0, description="Border value for OpenCV remap")
-    # Add other common configuration parameters if necessary
 
     class Config:
         arbitrary_types_allowed = True
@@ -21,6 +30,7 @@ class BaseProjectionConfig:
     Base class for projections, allowing dynamic initialization with configuration objects.
     Utilizes Pydantic for configuration validation and management.
     """
+
     def __init__(self, config_object: Any) -> None:
         """
         Initialize the projection configuration.

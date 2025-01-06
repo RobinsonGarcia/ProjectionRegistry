@@ -1,4 +1,4 @@
-### /Users/robinsongarcia/projects/gnomonic/projection/exceptions.py ###
+# /Users/robinsongarcia/projects/gnomonic/projection/exceptions.py
 
 """
 Custom exception classes for the Gnomonic Projection module.

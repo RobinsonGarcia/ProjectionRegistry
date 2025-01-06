@@ -10,7 +10,7 @@ output_file="combined_files.txt"
 current_dir=$(pwd)
 
 # Base directory to search (modify this if you want to search a different subfolder)
-base_dir="$current_dir/projection/base"
+base_dir="$current_dir/projection/"
 
 # Check if the base_dir exists
 if [[ ! -d "$base_dir" ]]; then

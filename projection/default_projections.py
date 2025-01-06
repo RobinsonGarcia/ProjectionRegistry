@@ -1,3 +1,5 @@
+# /Users/robinsongarcia/projects/gnomonic/projection/default_projections.py
+
 from .registry import ProjectionRegistry
 
 from .gnomonic.config import GnomonicConfig
@@ -10,7 +12,6 @@ from .mercator.grid import MercatorGridGeneration
 from .mercator.strategy import MercatorProjectionStrategy
 from .mercator.transform import MercatorTransformer  # Updated to per-projection transformer
 
-# Import the oblique mercator components
 from .oblique_mercator.config import ObliqueMercatorConfig
 from .oblique_mercator.grid import ObliqueMercatorGridGeneration
 from .oblique_mercator.strategy import ObliqueMercatorProjectionStrategy
@@ -23,10 +24,12 @@ import logging
 # Initialize logger for this module
 logger = logging.getLogger('gnomonic_projection.default_projections')
 
-
 def register_default_projections():
     """
     Register default projections with their components.
+
+    Raises:
+        RegistrationError: If registration of any default projection fails.
     """
     logger.debug("Registering default projections.")
     try:

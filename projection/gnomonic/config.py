@@ -1,3 +1,4 @@
+# /Users/robinsongarcia/projects/gnomonic/projection/gnomonic/config.py
 
 from typing import Any, Optional
 from pydantic import BaseModel, Field, validator
@@ -9,6 +10,13 @@ from ..exceptions import ConfigurationError
 logger = logging.getLogger('gnomonic_projection.gnomonic.config')
 
 class GnomonicConfigModel(BaseModel):
+    """
+    Pydantic model for Gnomonic projection configuration.
+
+    Attributes include radius of the Earth, center latitude and longitude,
+    field of view, grid resolutions, bounding box for lat/lon, and interpolation
+    parameters.
+    """
     R: float = Field(1.0, description="Radius of the sphere (e.g., Earth) in consistent units.")
     phi1_deg: float = Field(0.0, description="Latitude of the projection center in degrees.")
     lam0_deg: float = Field(0.0, description="Longitude of the projection center in degrees.")
@@ -44,23 +52,6 @@ class GnomonicConfig:
     This class encapsulates all necessary parameters required to perform both forward (equirectangular to Gnomonic)
     and inverse (Gnomonic to equirectangular) projections. It ensures that configurations are validated
     and managed efficiently.
-
-    ## Key Parameters:
-
-    - **R:** Radius of the sphere (e.g., Earth) in consistent units.
-    - **phi1_deg:** Latitude of the projection center in degrees.
-    - **lam0_deg:** Longitude of the projection center in degrees.
-    - **fov_deg:** Field of view in degrees.
-    - **x_points & y_points:** Grid resolution for the Gnomonic projection plane.
-    - **lon_points & lat_points:** Resolution for inverse grid mapping to the equirectangular projection.
-    - **lon_min, lon_max, lat_min, lat_max:** Geographic bounds of the equirectangular grid.
-    - **interpolation, borderMode, borderValue:** Parameters for image interpolation.
-
-    ## Mathematical Context:
-
-    The configuration parameters directly influence the projection equations derived from spherical trigonometry.
-    For instance, the field of view (`fov_deg`) determines the extent of the Gnomonic projection on the plane,
-    while the center coordinates (`phi1_deg`, `lam0_deg`) establish the orientation of the projection.
     """
 
     def __init__(self, **kwargs: Any) -> None:

@@ -1,4 +1,4 @@
-### /Users/robinsongarcia/projects/gnomonic/projection/base/strategy.py ###
+# /Users/robinsongarcia/projects/gnomonic/projection/base/strategy.py
 
 from typing import Any, Tuple
 import numpy as np
@@ -12,6 +12,7 @@ class BaseProjectionStrategy:
     """
     Base class for projection strategies.
     """
+
     @classmethod
     def from_spherical_to_projection(self, x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """

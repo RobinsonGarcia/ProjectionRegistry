@@ -1,4 +1,4 @@
-### /Users/robinsongarcia/projects/gnomonic/projection/__init__.py ###
+# /Users/robinsongarcia/projects/gnomonic/projection/__init__.py
 
 """
 Gnomonic Projection Package

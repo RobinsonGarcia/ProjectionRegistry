@@ -1,4 +1,4 @@
-### /Users/robinsongarcia/projects/gnomonic/projection/base/__init__.py ###
+# /Users/robinsongarcia/projects/gnomonic/projection/base/__init__.py
 
 """
 Base module for gnomonic projection components.

@@ -1,4 +1,4 @@
-### /Users/robinsongarcia/projects/gnomonic/projection/processor.py ###
+# /Users/robinsongarcia/projects/gnomonic/projection/processor.py
 
 from typing import Any, Optional, Tuple
 from .base.config import BaseProjectionConfig
@@ -10,11 +10,11 @@ import numpy as np
 # Initialize logger for this module
 logger = logging.getLogger('gnomonic_projection.processor')
 
-
 class ProjectionProcessor:
     """
     Processor for handling forward and backward projections using the provided configuration.
     """
+
     def __init__(self, config: BaseProjectionConfig) -> None:
         """
         Initialize the ProjectionProcessor with a given configuration.
@@ -44,7 +44,6 @@ class ProjectionProcessor:
             logger.exception(error_msg)
             raise ProcessingError(error_msg) from e
 
-    
     def forward(self, img: np.ndarray, **kwargs: Any) -> np.ndarray:
         """
         Forward projection of an image.
@@ -127,7 +126,6 @@ class ProjectionProcessor:
             x, y, mask = self.projection.from_spherical_to_projection(lat_grid, lon_grid)
             logger.debug("Backward projection computed successfully.")
 
-            # Use config_object instead of `config.config`
             map_x, map_y = self.transformer.projection_to_image_coords(x, y, self.config.config_object)
             logger.debug("Grid coordinates transformed to image space successfully.")
 
@@ -135,7 +133,7 @@ class ProjectionProcessor:
                 rect_img, map_x, map_y, mask if kwargs.get("return_mask", True) else None
             )
             logger.info("Backward projection completed successfully.")
-            return cv2.flip(back_projected_img,0)
+            return cv2.flip(back_projected_img, 0)
 
         except (GridGenerationError, ProcessingError, TransformationError, InterpolationError) as e:
             logger.error(f"Backward projection failed: {e}")

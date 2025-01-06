@@ -1,3 +1,5 @@
+# /Users/robinsongarcia/projects/gnomonic/projection/base/transform.py
+
 from typing import Any, Tuple
 import numpy as np
 import logging
@@ -12,6 +14,13 @@ class BaseCoordinateTransformer:
     """
 
     def __init__(self, config) -> None:
+        """
+        Initialize the BaseCoordinateTransformer with a given configuration.
+
+        Args:
+            config: The configuration containing necessary projection parameters.
+        """
+        logger.debug("Initializing BaseCoordinateTransformer.")
         self.config = config
 
     @classmethod
@@ -21,6 +30,12 @@ class BaseCoordinateTransformer:
         config: Any, 
         shape: Tuple[int, int, ...]
     ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Placeholder method for converting spherical coordinates to image coordinates.
+
+        Raises:
+            NotImplementedError: This method must be implemented by a subclass.
+        """
         raise NotImplementedError("Subclasses must implement forward.")
 
     @staticmethod
@@ -29,4 +44,10 @@ class BaseCoordinateTransformer:
         y: np.ndarray, 
         config: Any
     ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Placeholder method for converting projection coordinates to image coordinates.
+
+        Raises:
+            NotImplementedError: This method must be implemented by a subclass.
+        """
         raise NotImplementedError("Subclasses must implement forward.")
