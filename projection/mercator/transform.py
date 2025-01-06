@@ -57,7 +57,7 @@ class MercatorTransformer(BaseCoordinateTransformer):
             if not isinstance(lat, np.ndarray) or not isinstance(lon, np.ndarray):
                 raise TypeError("Latitude and longitude must be numpy arrays.")
 
-            H, W = shape
+
 
             # Very simplistic placeholder logic (not a real Mercator transformation).
             x = lon

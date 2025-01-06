@@ -14,7 +14,7 @@ class GnomonicGridGeneration(BaseGridGeneration):
     Grid generation for the Gnomonic projection.
     """
 
-    def projection_grid(self):
+    def projection_grid(self, delta_lat=0, delta_lon=0):
         """
         Generate the forward-projection grid (X, Y) for the Gnomonic projection.
 
@@ -30,7 +30,7 @@ class GnomonicGridGeneration(BaseGridGeneration):
         grid_x, grid_y = np.meshgrid(x_vals, y_vals)
         return grid_x, grid_y
 
-    def spherical_grid(self):
+    def spherical_grid(self, delta_lat=0, delta_lon=0):
         """
         Generate the (lon, lat) grid for backward projection.
 
@@ -38,7 +38,7 @@ class GnomonicGridGeneration(BaseGridGeneration):
             Tuple[np.ndarray, np.ndarray]: The longitude and latitude grids.
         """
         logger.debug("Generating Gnomonic spherical grid.")
-        lon_vals = np.linspace(self.config.lon_min, self.config.lon_max, self.config.lon_points)
-        lat_vals = np.linspace(self.config.lat_min, self.config.lat_max, self.config.lat_points)
+        lon_vals = np.linspace(self.config.lon_min, self.config.lon_max, self.config.lon_points) + delta_lon
+        lat_vals = np.linspace(self.config.lat_min, self.config.lat_max, self.config.lat_points) + delta_lat
         grid_lon, grid_lat = np.meshgrid(lon_vals, lat_vals)
         return grid_lon, grid_lat

@@ -6,7 +6,7 @@ from .exceptions import ProcessingError, InterpolationError, GridGenerationError
 import logging
 import cv2
 import numpy as np
-
+from .utils import rotate_equirectangular_image
 # Initialize logger for this module
 logger = logging.getLogger('gnomonic_projection.processor')
 
@@ -72,6 +72,15 @@ class ProjectionProcessor:
             self.config.update(**kwargs)
             logger.debug(f"Configuration updated with parameters: {kwargs}")
 
+            
+            
+            delta_lon = kwargs.get("delta_lon",0)
+            delta_lat = kwargs.get("delta_lat",0)
+            if (delta_lon!=0) or (delta_lat!=0):
+                img = rotate_equirectangular_image(img, delta_lat, delta_lon)
+
+            rotate_equirectangular_image
+
             x_grid, y_grid = self.grid_generation.projection_grid()
             logger.debug("Forward grid generated successfully.")
 
@@ -120,6 +129,12 @@ class ProjectionProcessor:
             self.config.update(**kwargs)
             logger.debug(f"Configuration updated with parameters: {kwargs}")
 
+            delta_lon = kwargs.get("delta_lon",0)
+            delta_lat = kwargs.get("delta_lat",0)
+            if (delta_lon!=0) or (delta_lat!=0):
+                rect_img = rotate_equirectangular_image(rect_img, delta_lat, delta_lon)
+
+            
             lon_grid, lat_grid = self.grid_generation.spherical_grid()
             logger.debug("Backward grid generated successfully.")
 
