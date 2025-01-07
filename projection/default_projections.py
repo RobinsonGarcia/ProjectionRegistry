@@ -18,6 +18,13 @@ from .stereographic.grid import StereographicGridGeneration
 from .stereographic.strategy import StereographicProjectionStrategy
 from .stereographic.transform import StereographicTransformer
 
+
+from .azimutal_equidistant.config import AzimutalEquidistantConfig
+from .azimutal_equidistant.grid import AzimutalEquidistantGridGeneration
+from .azimutal_equidistant.strategy import AzimutalEquidistantProjectionStrategy
+from .azimutal_equidistant.transform import AzimutalEquidistantTransformer
+
+
 from .base.interpolation import BaseInterpolation
 from .exceptions import RegistrationError
 import logging
@@ -41,6 +48,15 @@ def register_default_projections():
             "projection_strategy": GnomonicProjectionStrategy,
             "interpolation": BaseInterpolation,
             "transformer": GnomonicTransformer,  # Updated to GnomonicTransformer
+        })
+        logger.info("Default projection 'gnomonic' registered successfully.")
+
+        ProjectionRegistry.register("azimutal_equidistant", {
+            "config": AzimutalEquidistantConfig,
+            "grid_generation": AzimutalEquidistantGridGeneration,
+            "projection_strategy": AzimutalEquidistantProjectionStrategy,
+            "interpolation": BaseInterpolation,
+            "transformer": AzimutalEquidistantTransformer,  # Updated to GnomonicTransformer
         })
         logger.info("Default projection 'gnomonic' registered successfully.")
 
