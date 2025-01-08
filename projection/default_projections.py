@@ -12,19 +12,6 @@ from .mercator.grid import MercatorGridGeneration
 from .mercator.strategy import MercatorProjectionStrategy
 from .mercator.transform import MercatorTransformer  # Updated to per-projection transformer
 
-# Import your classes
-from .stereographic.config import StereographicConfig
-from .stereographic.grid import StereographicGridGeneration
-from .stereographic.strategy import StereographicProjectionStrategy
-from .stereographic.transform import StereographicTransformer
-
-
-from .azimutal_equidistant.config import AzimutalEquidistantConfig
-from .azimutal_equidistant.grid import AzimutalEquidistantGridGeneration
-from .azimutal_equidistant.strategy import AzimutalEquidistantProjectionStrategy
-from .azimutal_equidistant.transform import AzimutalEquidistantTransformer
-
-
 from .base.interpolation import BaseInterpolation
 from .exceptions import RegistrationError
 import logging
@@ -51,15 +38,6 @@ def register_default_projections():
         })
         logger.info("Default projection 'gnomonic' registered successfully.")
 
-        ProjectionRegistry.register("azimutal_equidistant", {
-            "config": AzimutalEquidistantConfig,
-            "grid_generation": AzimutalEquidistantGridGeneration,
-            "projection_strategy": AzimutalEquidistantProjectionStrategy,
-            "interpolation": BaseInterpolation,
-            "transformer": AzimutalEquidistantTransformer,  # Updated to GnomonicTransformer
-        })
-        logger.info("Default projection 'gnomonic' registered successfully.")
-
         # Register Mercator projection
         ProjectionRegistry.register("mercator", {
             "config": MercatorConfig,
@@ -70,13 +48,6 @@ def register_default_projections():
         })
 
 
-        ProjectionRegistry.register("stereographic", {
-        "config": StereographicConfig,
-        "grid_generation": StereographicGridGeneration,
-        "projection_strategy": StereographicProjectionStrategy,
-        "interpolation": BaseInterpolation,           # or your own
-        "transformer": StereographicTransformer,       # or your own
-    })
         logger.info("Default projection 'mercator' registered successfully.")
 
     except RegistrationError as e:
