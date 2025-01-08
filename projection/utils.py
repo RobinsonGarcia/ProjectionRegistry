@@ -4,9 +4,13 @@ import matplotlib.pyplot as plt
 from .logging_config import setup_logging
 
 import os
+import numpy as np
+import cv2
+import logging
+
 def rotate_equirectangular_image(image: np.ndarray, delta_lat: float, delta_lon: float) -> np.ndarray:
     """
-    Rotate an equirectangular image by delta_lat degrees in latitude and delta_lon degrees in longitude.
+    Rotate an equirectangular image as if rotating the entire sphere.
 
     Args:
         image (np.ndarray): Input equirectangular image in RGB format with shape (H, W, C).
@@ -18,11 +22,11 @@ def rotate_equirectangular_image(image: np.ndarray, delta_lat: float, delta_lon:
     """
     if image.ndim != 3 or image.shape[2] not in [1, 3, 4]:
         raise ValueError("Input image must be a 3D array with 1, 3, or 4 channels.")
-    
+
     H, W, C = image.shape
 
     # Create a grid of pixel coordinates (x, y)
-    logger = setup_logging()
+    logger = logging.getLogger("rotate_equirectangular_image")
     logger.debug(f"Image dimensions: Height={H}, Width={W}, Channels={C}")
 
     # Generate normalized pixel coordinates
@@ -30,52 +34,54 @@ def rotate_equirectangular_image(image: np.ndarray, delta_lat: float, delta_lon:
     y = np.linspace(0, H - 1, H)
     xv, yv = np.meshgrid(x, y)
 
-    # Convert pixel coordinates to geographic coordinates (lat, lon)
-    # Equirectangular projection:
-    # x: 0 to W-1 maps to lon: -180 to +180
-    # y: 0 to H-1 maps to lat: +90 to -90
-    lon = (xv / (W - 1)) * 360.0 - 180.0
-    lat = 90.0 - (yv / (H - 1)) * 180.0
+    # Convert pixel coordinates to spherical coordinates (lat, lon)
+    lon = (xv / (W - 1)) * 360.0 - 180.0  # Longitude: [-180, 180]
+    lat = 90.0 - (yv / (H - 1)) * 180.0  # Latitude: [90, -90]
 
-    logger.debug("Converted pixel coordinates to geographic coordinates.")
+    # Convert spherical coordinates to Cartesian coordinates
+    lat_rad = np.radians(lat)
+    lon_rad = np.radians(lon)
+    x_sphere = np.cos(lat_rad) * np.cos(lon_rad)
+    y_sphere = np.cos(lat_rad) * np.sin(lon_rad)
+    z_sphere = np.sin(lat_rad)
 
-    # Apply rotation
-    lon_rot = lon + delta_lon
-    lat_rot = lat + delta_lat
+    # Apply rotation: convert rotation angles to radians
+    delta_lat_rad = np.radians(delta_lat)
+    delta_lon_rad = np.radians(delta_lon)
 
-    logger.debug(f"Applied rotation: delta_lat={delta_lat}, delta_lon={delta_lon}")
+    # Latitude rotation (about the x-axis)
+    x_rot = x_sphere
+    y_rot = y_sphere * np.cos(delta_lat_rad) - z_sphere * np.sin(delta_lat_rad)
+    z_rot = y_sphere * np.sin(delta_lat_rad) + z_sphere * np.cos(delta_lat_rad)
 
-    # Handle longitude wrapping
-    lon_rot = (lon_rot + 180) % 360 - 180  # Wrap to [-180, 180)
-    logger.debug("Wrapped rotated longitudes to [-180, 180) degrees.")
+    # Longitude rotation (about the z-axis)
+    x_final = x_rot * np.cos(delta_lon_rad) - y_rot * np.sin(delta_lon_rad)
+    y_final = x_rot * np.sin(delta_lon_rad) + y_rot * np.cos(delta_lon_rad)
+    z_final = z_rot
 
-    # Handle latitude clamping
-    lat_rot = np.clip(lat_rot, -90, 90)
-    logger.debug("Clamped rotated latitudes to [-90, 90] degrees.")
+    # Convert back to spherical coordinates
+    lon_final = np.arctan2(y_final, x_final)
+    lat_final = np.arcsin(z_final)
 
-    # Convert rotated geographic coordinates back to pixel coordinates in the input image
-    x_rot = ((lon_rot + 180.0) / 360.0) * (W - 1)
-    y_rot = ((90.0 - lat_rot) / 180.0) * (H - 1)
+    # Normalize to degrees
+    lon_final_deg = np.degrees(lon_final)
+    lat_final_deg = np.degrees(lat_final)
 
-    logger.debug("Converted rotated geographic coordinates back to pixel coordinates.")
+    # Map back to pixel coordinates
+    x_rot_map = ((lon_final_deg + 180.0) / 360.0) * (W - 1)
+    y_rot_map = ((90.0 - lat_final_deg) / 180.0) * (H - 1)
 
-    # Create the mapping for remap function
-    map_x = x_rot.astype(np.float32)
-    map_y = y_rot.astype(np.float32)
+    # Remap the image
+    map_x = x_rot_map.astype(np.float32)
+    map_y = y_rot_map.astype(np.float32)
 
-    logger.debug("Created mapping arrays for remapping.")
-
-    # Remap the input image to get the rotated image
     rotated_image = cv2.remap(
         image,
         map_x,
         map_y,
         interpolation=cv2.INTER_LINEAR,
-        borderMode=cv2.BORDER_CONSTANT,
-        borderValue=0
+        borderMode=cv2.BORDER_WRAP
     )
-
-    logger.debug("Remapped the image to obtain the rotated image.")
 
     return rotated_image
 
