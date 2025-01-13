@@ -1,141 +1,137 @@
-import numpy as np
 import cv2
-import matplotlib.pyplot as plt
-from .logging_config import setup_logging
-
-import os
 import numpy as np
-import cv2
 import logging
 
-def rotate_equirectangular_image(image: np.ndarray, delta_lat: float, delta_lon: float) -> np.ndarray:
-    """
-    Rotate an equirectangular image as if rotating the entire sphere.
 
-    Args:
-        image (np.ndarray): Input equirectangular image in RGB format with shape (H, W, C).
-        delta_lat (float): Rotation angle in degrees for latitude. Positive shifts north, negative shifts south.
-        delta_lon (float): Rotation angle in degrees for longitude. Positive shifts east, negative shifts west.
+class PreprocessEquirectangularImage:
+    # Set up the logger for the class
+    logger = logging.getLogger("EquirectangularImage")
+    logger.setLevel(logging.DEBUG)
 
-    Returns:
-        np.ndarray: Rotated equirectangular image in RGB format with shape (H, W, C).
-    """
-    if image.ndim != 3 or image.shape[2] not in [1, 3, 4]:
-        raise ValueError("Input image must be a 3D array with 1, 3, or 4 channels.")
+    @classmethod
+    def extend_height(cls, image, fov_extra):
+        """
+        Extends the height of an equirectangular image based on the given additional FOV.
+        """
+        cls.logger.info("Starting height extension with fov_extra=%.2f", fov_extra)
 
-    H, W, C = image.shape
+        if not isinstance(image, np.ndarray):
+            cls.logger.error("Image is not a valid numpy array.")
+            raise TypeError("Image must be a numpy array.")
+        if fov_extra <= 0:
+            cls.logger.info("No extension needed as fov_extra=0.")
+            return image  # No extension needed
 
-    # Create a grid of pixel coordinates (x, y)
-    logger = logging.getLogger("rotate_equirectangular_image")
-    logger.debug(f"Image dimensions: Height={H}, Width={W}, Channels={C}")
+        fov_original = 180.0
+        height, width, channels = image.shape
+        h_prime = int((fov_extra / fov_original) * height)
+        cls.logger.debug("Original height: %d, Additional height: %d", height, h_prime)
 
-    # Generate normalized pixel coordinates
-    x = np.linspace(0, W - 1, W)
-    y = np.linspace(0, H - 1, H)
-    xv, yv = np.meshgrid(x, y)
+        black_extension = np.zeros((h_prime, width, channels), dtype=image.dtype)
+        extended_image = np.vstack((image, black_extension))
 
-    # Convert pixel coordinates to spherical coordinates (lat, lon)
-    lon = (xv / (W - 1)) * 360.0 - 180.0  # Longitude: [-180, 180]
-    lat = 90.0 - (yv / (H - 1)) * 180.0  # Latitude: [90, -90]
+        cls.logger.info("Height extension complete. New height: %d", extended_image.shape[0])
+        return extended_image
 
-    # Convert spherical coordinates to Cartesian coordinates
-    lat_rad = np.radians(lat)
-    lon_rad = np.radians(lon)
-    x_sphere = np.cos(lat_rad) * np.cos(lon_rad)
-    y_sphere = np.cos(lat_rad) * np.sin(lon_rad)
-    z_sphere = np.sin(lat_rad)
+    @classmethod
+    def rotate(cls, image, delta_lat, delta_lon):
+        """
+        Rotates an equirectangular image based on latitude and longitude shifts.
+        """
+        cls.logger.info("Starting rotation with delta_lat=%.2f, delta_lon=%.2f", delta_lat, delta_lon)
 
-    # Apply rotation: convert rotation angles to radians
-    delta_lat_rad = np.radians(delta_lat)
-    delta_lon_rad = np.radians(delta_lon)
+        if image.ndim != 3 or image.shape[2] not in [1, 3, 4]:
+            cls.logger.error("Invalid image dimensions. Expected a 3D array with 1, 3, or 4 channels.")
+            raise ValueError("Input image must be a 3D array with 1, 3, or 4 channels.")
 
-    # Latitude rotation (about the x-axis)
-    x_rot = x_sphere
-    y_rot = y_sphere * np.cos(delta_lat_rad) - z_sphere * np.sin(delta_lat_rad)
-    z_rot = y_sphere * np.sin(delta_lat_rad) + z_sphere * np.cos(delta_lat_rad)
+        H, W, C = image.shape
+        cls.logger.debug("Image dimensions: Height=%d, Width=%d, Channels=%d", H, W, C)
 
-    # Longitude rotation (about the z-axis)
-    x_final = x_rot * np.cos(delta_lon_rad) - y_rot * np.sin(delta_lon_rad)
-    y_final = x_rot * np.sin(delta_lon_rad) + y_rot * np.cos(delta_lon_rad)
-    z_final = z_rot
+        x = np.linspace(0, W - 1, W)
+        y = np.linspace(0, H - 1, H)
+        xv, yv = np.meshgrid(x, y)
 
-    # Convert back to spherical coordinates
-    lon_final = np.arctan2(y_final, x_final)
-    lat_final = np.arcsin(z_final)
+        lon = (xv / (W - 1)) * 360.0 - 180.0
+        lat = 90.0 - (yv / (H - 1)) * 180.0
 
-    # Normalize to degrees
-    lon_final_deg = np.degrees(lon_final)
-    lat_final_deg = np.degrees(lat_final)
+        lat_rad = np.radians(lat)
+        lon_rad = np.radians(lon)
+        x_sphere = np.cos(lat_rad) * np.cos(lon_rad)
+        y_sphere = np.cos(lat_rad) * np.sin(lon_rad)
+        z_sphere = np.sin(lat_rad)
 
-    # Map back to pixel coordinates
-    x_rot_map = ((lon_final_deg + 180.0) / 360.0) * (W - 1)
-    y_rot_map = ((90.0 - lat_final_deg) / 180.0) * (H - 1)
+        delta_lat_rad = np.radians(delta_lat)
+        delta_lon_rad = np.radians(delta_lon)
 
-    # Remap the image
-    map_x = x_rot_map.astype(np.float32)
-    map_y = y_rot_map.astype(np.float32)
+        x_rot = x_sphere
+        y_rot = y_sphere * np.cos(delta_lat_rad) - z_sphere * np.sin(delta_lat_rad)
+        z_rot = y_sphere * np.sin(delta_lat_rad) + z_sphere * np.cos(delta_lat_rad)
 
-    rotated_image = cv2.remap(
-        image,
-        map_x,
-        map_y,
-        interpolation=cv2.INTER_LINEAR,
-        borderMode=cv2.BORDER_WRAP
-    )
+        x_final = x_rot * np.cos(delta_lon_rad) - y_rot * np.sin(delta_lon_rad)
+        y_final = x_rot * np.sin(delta_lon_rad) + y_rot * np.cos(delta_lon_rad)
+        z_final = z_rot
 
-    return rotated_image
+        lon_final = np.arctan2(y_final, x_final)
+        lat_final = np.arcsin(z_final)
 
-# Example Usage
-if __name__ == "__main__":
-    import logging
+        lon_final_deg = np.degrees(lon_final)
+        lat_final_deg = np.degrees(lat_final)
 
-    # Configure logging
-    logging.basicConfig(level=logging.DEBUG)
-    logger = logging.getLogger("rotate_equirectangular_image")
+        x_rot_map = ((lon_final_deg + 180.0) / 360.0) * (W - 1)
+        y_rot_map = ((90.0 - lat_final_deg) / 180.0) * (H - 1)
 
-    # Path to input equirectangular image
-    input_image_path = "data/image1.png"  # Replace with your image path
+        map_x = x_rot_map.astype(np.float32)
+        map_y = y_rot_map.astype(np.float32)
 
-    # Load the image using OpenCV
-    input_img_bgr = cv2.imread(input_image_path)
-    if input_img_bgr is None:
-        raise FileNotFoundError(f"Image not found at path: {input_image_path}")
+        rotated_image = cv2.remap(
+            image,
+            map_x,
+            map_y,
+            interpolation=cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_WRAP
+        )
 
-    # Convert from BGR to RGB
-    input_img = cv2.cvtColor(input_img_bgr, cv2.COLOR_BGR2RGB)
+        cls.logger.info("Rotation complete.")
+        return rotated_image
 
-    # Define rotation angles
-    delta_lat = 0.0  # Shift 10 degrees north
-    delta_lon = -98.0  # Shift 30 degrees east
+    @classmethod
+    def preprocess(cls, image, **kwargs):
+        """
+        Preprocess an equirectangular image by extending its height and then rotating it.
 
-    logger.info(f"Rotating image by delta_lat={delta_lat}, delta_lon={delta_lon}")
+        Parameters:
+            image (np.ndarray): Input equirectangular image.
+            **kwargs: Parameters for preprocessing:
+                - fov_extra (float): Additional field of view in degrees to extend. Default is 0.
+                - delta_lat (float): Latitude rotation in degrees. Default is 0.
+                - delta_lon (float): Longitude rotation in degrees. Default is 0.
 
-    # Perform rotation
-    rotated_img = rotate_equirectangular_image(input_img, delta_lat, delta_lon)
+        Returns:
+            np.ndarray: Preprocessed image.
+        """
+        fov_extra = kwargs.get("fov_extra", 0)
+        delta_lat = kwargs.get("delta_lat", 0)
+        delta_lon = kwargs.get("delta_lon", 0)
 
-    # Convert back to BGR for saving with OpenCV
-    rotated_img_bgr = cv2.cvtColor(rotated_img, cv2.COLOR_RGB2BGR)
+        cls.logger.info("Starting preprocessing with parameters: fov_extra=%.2f, delta_lat=%.2f, delta_lon=%.2f",
+                        fov_extra, delta_lat, delta_lon)
 
-    # Define output path
-    output_image_path = "results/rotated_image.png"
-    os.makedirs(os.path.dirname(output_image_path), exist_ok=True)
+        # Step 1: Extend the image height
+        processed_image = cls.extend_height(image, fov_extra)
 
-    # Save the rotated image
-    cv2.imwrite(output_image_path, rotated_img_bgr)
-    logger.info(f"Rotated image saved to {output_image_path}")
+        # Step 2: Rotate the image
+        processed_image = cls.rotate(processed_image, delta_lat, delta_lon)
 
-    # Display original and rotated images using Matplotlib
-    plt.figure(figsize=(15, 7))
+        cls.logger.info("Preprocessing complete.")
+        return processed_image
 
-    plt.subplot(1, 2, 1)
-    plt.title("Original Equirectangular Image")
-    plt.imshow(input_img)
-    plt.axis('off')
-
-    plt.subplot(1, 2, 2)
-    plt.title(f"Rotated Image (Δlat={delta_lat}°, Δlon={delta_lon}°)")
-    plt.imshow(rotated_img)
-    plt.axis('off')
-
-    plt.tight_layout()
-    plt.show()
+    @classmethod
+    def save_image(cls, image, file_path):
+        """
+        Saves the current image to the specified file path.
+        """
+        if not isinstance(image, np.ndarray):
+            cls.logger.error("Image is not a valid numpy array.")
+            raise TypeError("Image must be a numpy array.")
+        cv2.imwrite(file_path, image)
+        cls.logger.info("Image saved to %s", file_path)
