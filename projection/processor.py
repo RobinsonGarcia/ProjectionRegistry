@@ -94,7 +94,7 @@ class ProjectionProcessor:
             logger.exception("Unexpected error during forward projection.")
             raise ProcessingError(f"Unexpected error during forward projection: {e}")
 
-    def backward(self, rect_img: np.ndarray, return_mask = False, **kwargs: Any) -> np.ndarray:
+    def backward(self, rect_img: np.ndarray, return_mask: bool=False, **kwargs: Any) -> np.ndarray:
         """
         Backward projection of a rectilinear image to equirectangular.
 
@@ -121,8 +121,7 @@ class ProjectionProcessor:
         try:
             self.config.update(**kwargs)
             logger.debug(f"Configuration updated with parameters: {kwargs}")
-
-            
+      
             lon_grid, lat_grid = self.grid_generation.spherical_grid()
             logger.debug("Backward grid generated successfully.")
 
@@ -137,7 +136,7 @@ class ProjectionProcessor:
             )
             logger.info("Backward projection completed successfully.")
             if return_mask:
-                return cv2.flip(back_projected_img, 0), mask
+                return cv2.flip(back_projected_img, 0), cv2.flip(mask,0)
 
             return cv2.flip(back_projected_img, 0)
 
