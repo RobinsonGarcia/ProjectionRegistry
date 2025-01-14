@@ -136,7 +136,7 @@ class ProjectionProcessor:
             )
             logger.info("Backward projection completed successfully.")
             if return_mask:
-                return cv2.flip(back_projected_img, 0), cv2.flip(mask,0)
+                return cv2.flip(back_projected_img, 0), cv2.flip(mask * 1,0) == 1
 
             return cv2.flip(back_projected_img, 0)
 
