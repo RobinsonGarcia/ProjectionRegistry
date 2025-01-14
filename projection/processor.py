@@ -94,7 +94,7 @@ class ProjectionProcessor:
             logger.exception("Unexpected error during forward projection.")
             raise ProcessingError(f"Unexpected error during forward projection: {e}")
 
-    def backward(self, rect_img: np.ndarray, **kwargs: Any) -> np.ndarray:
+    def backward(self, rect_img: np.ndarray, return_mask = False, **kwargs: Any) -> np.ndarray:
         """
         Backward projection of a rectilinear image to equirectangular.
 
@@ -136,6 +136,9 @@ class ProjectionProcessor:
                 rect_img, map_x, map_y, mask if kwargs.get("return_mask", True) else None
             )
             logger.info("Backward projection completed successfully.")
+            if return_mask:
+                return cv2.flip(back_projected_img, 0), mask
+
             return cv2.flip(back_projected_img, 0)
 
         except (GridGenerationError, ProcessingError, TransformationError, InterpolationError) as e:
