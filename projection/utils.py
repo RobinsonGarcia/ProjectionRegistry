@@ -40,9 +40,9 @@ class PreprocessEquirectangularImage:
         """
         cls.logger.info("Starting rotation with delta_lat=%.2f, delta_lon=%.2f", delta_lat, delta_lon)
 
-        if image.ndim != 3 or image.shape[2] not in [1, 3, 4]:
-            cls.logger.error("Invalid image dimensions. Expected a 3D array with 1, 3, or 4 channels.")
-            raise ValueError("Input image must be a 3D array with 1, 3, or 4 channels.")
+        # if image.ndim != 3 or image.shape[2] not in [1, 3, 4]:
+        #    cls.logger.error("Invalid image dimensions. Expected a 3D array with 1, 3, or 4 channels.")
+        #    raise ValueError("Input image must be a 3D array with 1, 3, or 4 channels.")
 
         H, W, C = image.shape
         cls.logger.debug("Image dimensions: Height=%d, Width=%d, Channels=%d", H, W, C)
