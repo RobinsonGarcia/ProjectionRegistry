@@ -9,22 +9,22 @@ class PreprocessEquirectangularImage:
     logger.setLevel(logging.DEBUG)
 
     @classmethod
-    def extend_height(cls, image, fov_extra):
+    def extend_height(cls, image, shadow_angle):
         """
         Extends the height of an equirectangular image based on the given additional FOV.
         """
-        cls.logger.info("Starting height extension with fov_extra=%.2f", fov_extra)
+        cls.logger.info("Starting height extension with shadow_angle=%.2f", shadow_angle)
 
         if not isinstance(image, np.ndarray):
             cls.logger.error("Image is not a valid numpy array.")
             raise TypeError("Image must be a numpy array.")
-        if fov_extra <= 0:
-            cls.logger.info("No extension needed as fov_extra=0.")
+        if shadow_angle <= 0:
+            cls.logger.info("No extension needed as shadow_angle=0.")
             return image  # No extension needed
 
         fov_original = 180.0
         height, width, channels = image.shape
-        h_prime = int((fov_extra / fov_original) * height)
+        h_prime = int((shadow_angle / fov_original) * height)
         cls.logger.debug("Original height: %d, Additional height: %d", height, h_prime)
 
         black_extension = np.zeros((h_prime, width, channels), dtype=image.dtype)
@@ -102,22 +102,22 @@ class PreprocessEquirectangularImage:
         Parameters:
             image (np.ndarray): Input equirectangular image.
             **kwargs: Parameters for preprocessing:
-                - fov_extra (float): Additional field of view in degrees to extend. Default is 0.
+                - shadow_angle (float): Additional field of view in degrees to extend. Default is 0.
                 - delta_lat (float): Latitude rotation in degrees. Default is 0.
                 - delta_lon (float): Longitude rotation in degrees. Default is 0.
 
         Returns:
             np.ndarray: Preprocessed image.
         """
-        fov_extra = kwargs.get("fov_extra", 0)
+        shadow_angle = kwargs.get("shadow_angle", 0)
         delta_lat = kwargs.get("delta_lat", 0)
         delta_lon = kwargs.get("delta_lon", 0)
 
-        cls.logger.info("Starting preprocessing with parameters: fov_extra=%.2f, delta_lat=%.2f, delta_lon=%.2f",
-                        fov_extra, delta_lat, delta_lon)
+        cls.logger.info("Starting preprocessing with parameters: shadow_angle=%.2f, delta_lat=%.2f, delta_lon=%.2f",
+                        shadow_angle, delta_lat, delta_lon)
 
         # Step 1: Extend the image height
-        processed_image = cls.extend_height(image, fov_extra)
+        processed_image = cls.extend_height(image, shadow_angle)
 
         # Step 2: Rotate the image
         processed_image = cls.rotate(processed_image, delta_lat, delta_lon)
