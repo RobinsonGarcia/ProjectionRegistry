@@ -98,8 +98,9 @@ class GnomonicTransformer(BaseCoordinateTransformer):
         H, W = shape  
 
         # Clamp extreme values if necessary (example only, logic unchanged)
-        lon[lon>180] = 180 - lon[lon>180]
-        lat[lat>90] = 90 - lat[lat>90]
+        lon[lon>180] = -360 + lon[lon>180]
+        lon[lon<-180] = 180 + (lon[lon<-180] + 180)
+        lat[lat>90] = -180 + lat[lat>90]
 
         map_x = self._compute_image_coords(
             lon, self.config.lon_min, self.config.lon_max, W
