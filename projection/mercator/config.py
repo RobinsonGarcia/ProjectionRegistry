@@ -32,6 +32,8 @@ class MercatorConfigModel(BaseModel):
     lat_max: float = Field(85.0, description="Maximum latitude (restricted for Mercator).")
     x_points: int = Field(1024, description="Number of points along the x-axis.")
     y_points: int = Field(512, description="Number of points along the y-axis.")
+    lon_points: int = Field(1024, description="Number of longitude points for inverse grid mapping.")
+    lat_points: int = Field(512, description="Number of latitude points for inverse grid mapping.")
     fov_deg: float = Field(90.0, description="Field of view in degrees")
     interpolation: Optional[int] = Field(default=cv2.INTER_LINEAR, description="Interpolation method for OpenCV remap")
     borderMode: Optional[int] = Field(default=cv2.BORDER_CONSTANT, description="Border mode for OpenCV remap")

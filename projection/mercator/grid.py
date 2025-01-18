@@ -35,7 +35,7 @@ class MercatorGridGeneration(BaseGridGeneration):
             Tuple[np.ndarray, np.ndarray]: The X and Y coordinate grids (map_x, map_y).
         """
         logger.debug("Generating Mercator spherical grid.")
-        x = np.linspace(self.config.config.lon_min, self.config.config.lon_max, self.config.config.x_points)
-        y = np.linspace(self.config.config.lat_max, self.config.config.lat_min, self.config.config.y_points)
+        x = np.linspace(self.config.config.lon_min, self.config.config.lon_max, self.config.config.lon_points)
+        y = np.linspace(self.config.config.lat_max, self.config.config.lat_min, self.config.config.lat_points)
         map_y, map_x = np.meshgrid(x, y)
         return map_x, map_y
