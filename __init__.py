@@ -1,3 +1,3 @@
-from .projection import ProjectionRegistry
+from .spherical_projections import ProjectionRegistry
 
 __all__ = ["ProjectionRegistry"]
