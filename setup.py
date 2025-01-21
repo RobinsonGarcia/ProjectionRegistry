@@ -11,13 +11,13 @@ HERE = pathlib.Path(__file__).parent
 README = (HERE / "README.md").read_text() if (HERE / "README.md").exists() else ""
 
 setup(
-    name="spherical_projection",                # Package name (change as appropriate)
-    version="0.1.0-beta",                           # Package version
+    name="spherical_projections",                # Package name (change as appropriate)
+    version="v0.1.0-beta",                           # Package version
     description="A spherical projection library for Python",  # Short description
     long_description=README,                   # Detailed description from your README
     long_description_content_type="text/markdown",
     author="RLSGarcia",                        # Replace with your name or organization
-    author_email="your.email@example.com",     # Replace with your email
+    author_email="RLSGarcia@icloud.com",     # Replace with your email
     url="https://github.com/RobinsonGarcia/ProjectionRegistry/",  # Project URL
     packages=find_packages(exclude=["tests*", "docs*", "examples*"]),  
     include_package_data=True,                 # If you have non-Python files to include
