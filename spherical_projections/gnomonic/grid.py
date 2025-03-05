@@ -7,7 +7,7 @@ from ..exceptions import GridGenerationError
 import numpy as np
 import logging
 
-logger = logging.getLogger('gnomonic_projection.gnomonic.grid')
+logger = logging.getLogger('spherical_projections.gnomonic_projection.gnomonic.grid')
 
 class GnomonicGridGeneration(BaseGridGeneration):
     """

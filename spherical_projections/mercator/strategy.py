@@ -4,7 +4,7 @@ from ..base.strategy import BaseProjectionStrategy
 import numpy as np
 import logging
 
-logger = logging.getLogger('projection.mercator.strategy')
+logger = logging.getLogger('spherical_projections.projection.mercator.strategy')
 
 class MercatorProjectionStrategy(BaseProjectionStrategy):
     """

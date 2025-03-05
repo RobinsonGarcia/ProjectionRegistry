@@ -6,7 +6,7 @@ import logging
 from ..exceptions import TransformationError, ConfigurationError
 from ..base.transform import BaseCoordinateTransformer
 
-logger = logging.getLogger('projection.mercator.transform')
+logger = logging.getLogger('spherical_projections.projection.mercator.transform')
 
 class MercatorTransformer(BaseCoordinateTransformer):
     """

@@ -6,7 +6,7 @@ import cv2
 import logging
 from ..exceptions import ConfigurationError
 
-logger = logging.getLogger('projection.mercator.config')
+logger = logging.getLogger('spherical_projections.projection.mercator.config')
 
 class MercatorConfigModel(BaseModel):
     """

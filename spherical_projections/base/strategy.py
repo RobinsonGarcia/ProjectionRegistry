@@ -6,7 +6,7 @@ import logging
 from ..exceptions import ProcessingError
 
 # Initialize logger for this module
-logger = logging.getLogger('gnomonic_projection.base.strategy')
+logger = logging.getLogger('spherical_projections.base.strategy')
 
 class BaseProjectionStrategy:
     """

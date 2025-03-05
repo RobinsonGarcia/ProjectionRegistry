@@ -7,7 +7,7 @@ import logging
 from ..exceptions import InterpolationError
 
 # Initialize logger for this module
-logger = logging.getLogger('gnomonic_projection.base.interpolation')
+logger = logging.getLogger('spherical_projections.base.interpolation')
 
 class BaseInterpolation:
     """

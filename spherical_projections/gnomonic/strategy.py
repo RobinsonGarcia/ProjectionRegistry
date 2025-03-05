@@ -7,7 +7,7 @@ from ..exceptions import ProcessingError
 import numpy as np
 import logging
 
-logger = logging.getLogger('gnomonic_projection.gnomonic.strategy')
+logger = logging.getLogger('spherical_projections.gnomonic_projection.gnomonic.strategy')
 
 class GnomonicProjectionStrategy(BaseProjectionStrategy):
     """

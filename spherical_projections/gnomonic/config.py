@@ -7,7 +7,7 @@ import logging
 from ..exceptions import ConfigurationError
 
 # Initialize logger for this module
-logger = logging.getLogger('gnomonic_projection.gnomonic.config')
+logger = logging.getLogger('spherical_projections.gnomonic_projection.gnomonic.config')
 
 class GnomonicConfigModel(BaseModel):
     """

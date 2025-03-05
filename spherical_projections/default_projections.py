@@ -17,7 +17,7 @@ from .exceptions import RegistrationError
 import logging
 
 # Initialize logger for this module
-logger = logging.getLogger('gnomonic_projection.default_projections')
+logger = logging.getLogger('spherical_projections.default_projections')
 
 def register_default_projections():
     """

@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 from .utils import PreprocessEquirectangularImage
 # Initialize logger for this module
-logger = logging.getLogger('gnomonic_projection.processor')
+logger = logging.getLogger('spherical_projections.processor')
 
 class ProjectionProcessor:
     """
