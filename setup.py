@@ -12,7 +12,7 @@ README = (HERE / "README.md").read_text() if (HERE / "README.md").exists() else 
 
 setup(
     name="spherical_projections",                # Package name (change as appropriate)
-    version="v0.1.0-beta",                           # Package version
+    version="v0.1.1-beta",                           # Package version
     description="A spherical projection library for Python",  # Short description
     long_description=README,                   # Detailed description from your README
     long_description_content_type="text/markdown",
