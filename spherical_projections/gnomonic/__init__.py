@@ -43,7 +43,7 @@ from .transform import GnomonicTransformer
 from ..logging_config import setup_logging
 
 # Initialize logger for this module
-logger = logging.getLogger('gnomonic_projection.gnomonic')
+logger = logging.getLogger('spherical_projections.gnomonic_projection.gnomonic')
 
 def initialize_gnomonic_module():
     """

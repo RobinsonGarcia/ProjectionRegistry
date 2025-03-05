@@ -3,7 +3,7 @@
 from typing import Any, Dict, Optional, Type, Union
 import logging
 
-logger = logging.getLogger('gnomonic_projection.registry')
+logger = logging.getLogger('spherical_projections.registry')
 
 class RegistryBase(type):
     """

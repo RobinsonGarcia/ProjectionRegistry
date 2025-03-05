@@ -1,39 +1,42 @@
-# /Users/robinsongarcia/projects/gnomonic/projection/logging_config.py
-
-"""
-Logging configuration for the Gnomonic Projection module.
-"""
-
 import logging
 import sys
+import os
 
 def setup_logging():
     """
-    Set up logging configuration.
-
-    Returns:
-        logging.Logger: Configured logger for the 'gnomonic_projection' namespace.
+    Set up logging configuration based on the DEBUG environment variable.
     """
-    logger = logging.getLogger('gnomonic_projection')
-    logger.setLevel(logging.DEBUG)  # Set to DEBUG to capture all levels of logs
+    debug_mode = os.getenv('DEBUG', 'false').lower() == 'true'  # Check if DEBUG is set to "true"
 
-    # Create handlers
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)  # Set to INFO for console output
+    logger = logging.getLogger('spherical_projections')
 
-    file_handler = logging.FileHandler('gnomonic_projection.log')
-    file_handler.setLevel(logging.DEBUG)  # Detailed logs in file
+    # Remove existing handlers to avoid duplicates
+    if logger.hasHandlers():
+        logger.handlers.clear()
 
-    # Create formatters and add them to handlers
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    console_handler.setFormatter(formatter)
-    file_handler.setFormatter(formatter)
+    if debug_mode:
+        logger.setLevel(logging.DEBUG)  # Enable detailed logging
 
-    # Add handlers to the logger
-    if not logger.hasHandlers():
+        # Create handlers
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(logging.INFO)  # Console logs at INFO level
+
+        file_handler = logging.FileHandler('spherical_projections.log')
+        file_handler.setLevel(logging.DEBUG)  # File logs at DEBUG level
+
+        # Create formatters and add them to handlers
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        console_handler.setFormatter(formatter)
+        file_handler.setFormatter(formatter)
+
+        # Add handlers to the main logger
         logger.addHandler(console_handler)
         logger.addHandler(file_handler)
+
+        # Ensure submodules propagate logs up
+        logger.propagate = True
+
+    else:
+        logging.disable(logging.CRITICAL)  # Silence all logging
 
     return logger

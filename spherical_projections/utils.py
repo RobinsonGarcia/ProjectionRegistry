@@ -5,7 +5,7 @@ import logging
 
 class PreprocessEquirectangularImage:
     # Set up the logger for the class
-    logger = logging.getLogger("EquirectangularImage")
+    logger = logging.getLogger("spherical_projections.EquirectangularImage")
     logger.setLevel(logging.DEBUG)
 
     @classmethod

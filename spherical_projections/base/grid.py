@@ -6,7 +6,7 @@ import logging
 from ..exceptions import GridGenerationError, ProcessingError
 
 # Initialize logger for this module
-logger = logging.getLogger('gnomonic_projection.base.grid')
+logger = logging.getLogger('spherical_projections.base.grid')
 
 class BaseGridGeneration:
     """

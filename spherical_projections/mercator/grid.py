@@ -4,7 +4,7 @@ from ..base.grid import BaseGridGeneration
 import numpy as np
 import logging
 
-logger = logging.getLogger('projection.mercator.grid')
+logger = logging.getLogger('spherical_projections.projection.mercator.grid')
 
 class MercatorGridGeneration(BaseGridGeneration):
     """

@@ -7,7 +7,7 @@ from ..exceptions import TransformationError, ConfigurationError
 from ..base.transform import BaseCoordinateTransformer
 
 # Configure logger for the transformation module
-logger = logging.getLogger('gnomonic_projection.gnomonic.transform')
+logger = logging.getLogger('spherical_projections.gnomonic_projection.gnomonic.transform')
 
 class GnomonicTransformer(BaseCoordinateTransformer):
     """
